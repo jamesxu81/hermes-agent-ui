@@ -1,0 +1,2979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mission Control — Hermes</title>
+<style>
+  :root{--bg:#f0f4f8;--bg2:#ffffff;--sidebar:#0b1220;--accent:#7c3aed;--accent2:#a855f7;--card:#fff;--border:#e2e8f0;--text:#0b1220;--muted:#6b7280;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--run:#3b82f6}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{display:flex;height:100vh;font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+  /* Sidebar */
+  #sidebar{width:210px;min-width:210px;background:var(--sidebar);display:flex;flex-direction:column;padding:16px 0}
+  #sidebar h1{color:#fff;font-size:14px;font-weight:700;padding:0 16px 20px;letter-spacing:.04em;opacity:.9}
+  #sidebar h1 span{color:var(--accent2)}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;border-left:3px solid transparent;transition:all .15s}
+  .nav-item:hover{color:#fff;background:rgba(255,255,255,.06)}
+  .nav-item.active{color:#fff;background:rgba(124,58,237,.2);border-left-color:var(--accent2)}
+  .nav-item .icon{font-size:16px}
+  /* Main */
+  #main{flex:1;overflow:auto;padding:24px}
+  .tab{display:none}.tab.active{display:block}
+  h2{font-size:20px;font-weight:700;margin-bottom:16px}
+  /* Cards */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
+  /* Status badges */
+  .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+  .badge-ok{background:#dcfce7;color:#166534}
+  .token-badge{display:inline-block;font-size:11px;background:#1e1b4b;color:#a5b4fc;border:1px solid #3730a3;border-radius:4px;padding:1px 6px;cursor:default;white-space:nowrap}
+  .badge-error{background:#fee2e2;color:#991b1b}
+  .badge-pending{background:#fef9c3;color:#854d0e}
+  .badge-running{background:#dbeafe;color:#1e40af}
+  .badge-done{background:#f0fdf4;color:#166534}
+  .badge-idle{background:#f1f5f9;color:#475569}
+  .badge-muted{background:#f1f5f9;color:#64748b}
+  .btn-danger{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+  .btn-danger:hover{background:#fecaca}
+  /* Table */
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+  th{background:#f8fafc;padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)}
+  td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#f8fafc}
+  /* Buttons */
+  button{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:#fff;font-size:12px;cursor:pointer;transition:all .15s}
+  button:hover{background:#f1f5f9}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-primary:hover{background:#6d28d9}
+  .btn-sm{padding:3px 8px;font-size:11px}
+  /* Kanban */
+  #kanban-board{display:flex;gap:16px;align-items:flex-start}
+  .kb-col{flex:1;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;min-height:300px;transition:box-shadow .15s,opacity .15s}
+  .kb-col h3{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;cursor:grab;user-select:none;display:flex;align-items:center;gap:6px}
+  .kb-col h3::before{content:'⠿';font-size:14px;color:#c4b5fd;opacity:.7}
+  .kb-col h3:active{cursor:grabbing}
+  .kb-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:grab;font-size:13px;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:box-shadow .15s}
+  .kb-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.08)}
+  .kb-card.dragging{opacity:.5}
+  .kb-col.drag-over{background:#e0f2fe;border-color:#0ea5ff}
+  .kb-col.col-dragging{opacity:.4;box-shadow:0 0 0 2px var(--accent)}
+  .kb-col.col-drop-target{background:#f0f9ff;border:2px dashed #0ea5ff}
+  .kb-card-title{font-weight:600;margin-bottom:3px}
+  .kb-card-desc{font-size:11px;color:var(--muted)}
+  .kb-card-actions{display:flex;gap:4px;margin-top:6px}
+  /* OpenClaw-style card meta row */
+  .kb-card-meta{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .btn-run-card{background:#dcfce7;color:#166534;border:1px solid #86efac;font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-weight:600;transition:background .15s}
+  .btn-run-card:hover{background:#bbf7d0}
+  .btn-run-card.running{background:#dbeafe;color:#1e40af;border-color:#93c5fd;cursor:not-allowed}
+  .btn-logs-sm{font-size:11px;padding:3px 8px}
+  .kb-status-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;border:1px solid}
+  .kb-status-done{background:#dcfce7;color:#166534;border-color:#86efac}
+  .kb-status-failed{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+  .kb-status-running{background:#dbeafe;color:#1e40af;border-color:#93c5fd}
+  .kb-completed-at{font-size:11px;color:#6b7280;margin-top:2px}
+  /* Card details expand/collapse */
+  .kb-card-details-wrap{white-space:pre-wrap;color:var(--muted);font-size:11px;margin-top:4px}
+  .kb-card-details-wrap.clamped{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+  .kb-card-expand-btn{display:none;background:none;border:none;cursor:pointer;color:#9ca3af;font-size:12px;padding:2px 10px;border-radius:4px;transition:color .15s,background .15s;margin-top:2px}
+  .kb-card-expand-btn:hover{color:#374151;background:#f3f4f6}
+  /* Logs modal */
+  #logs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:250;align-items:center;justify-content:center;padding:16px}
+  #logs-modal.open{display:flex}
+  .logs-modal-box{background:#0f172a;border-radius:12px;width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+  .logs-modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1e293b;flex-shrink:0}
+  .logs-modal-title{font-size:14px;font-weight:600;color:#e2e8f0}
+  .logs-modal-close{background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;transition:color .15s}
+  .logs-modal-close:hover{color:#e2e8f0}
+  .logs-modal-body{overflow-y:auto;padding:16px;flex:1;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:12px;line-height:1.6;color:#94a3b8;white-space:pre-wrap;word-break:break-all}
+  .pri-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;cursor:pointer;white-space:nowrap;user-select:none;flex-shrink:0}
+  .pri-none{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .pri-low{background:#1a3a1a;color:#4ade80;border:1px solid #4ade80}
+  .pri-medium{background:#3a2e00;color:#fbbf24;border:1px solid #fbbf24}
+  .pri-high{background:#3a1a1a;color:#f87171;border:1px solid #f87171}
+  /* Modal */
+  #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
+  #modal.open{display:flex}
+  .modal-box{background:#fff;border-radius:12px;padding:24px;max-width:700px;width:95%;max-height:90vh;overflow:auto}
+  .modal-box h3{margin-bottom:12px;font-size:16px}
+  .modal-box pre{background:#f6f8fa;padding:12px;border-radius:6px;font-size:12px;overflow:auto;max-height:400px;white-space:pre-wrap;word-wrap:break-word}
+  .modal-box label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-top:12px}
+  .modal-box input[type=text],.modal-box textarea{width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:4px}
+  .modal-box textarea{min-height:100px;resize:vertical}
+  /* Toast */
+  #toast{position:fixed;bottom:24px;right:24px;background:#0b1220;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;display:none;z-index:200}
+  /* Section headers */
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .section-header h2,.section-header h3{margin-bottom:0}
+  /* Memory */
+  .memory-block{background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;white-space:pre-wrap;font-size:13px;line-height:1.6;max-height:400px;overflow:auto}
+  /* Cron history date group */
+  .history-group{margin-bottom:24px}
+  .history-date{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding:4px 0;border-bottom:1px solid var(--border)}
+  /* Output viewer */
+  .output-viewer{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:14px;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:12px;line-height:1.6;max-height:500px;overflow:auto;white-space:pre-wrap;word-wrap:break-word}
+  /* Skills */
+  .skill-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+  .skill-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:opacity .2s,box-shadow .15s}
+  .skill-card:hover{box-shadow:0 0 0 2px var(--accent)}
+  .skill-card.disabled{opacity:.5}
+  .skill-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .skill-card-name{font-weight:700;font-size:13px;color:var(--accent)}
+  .skill-card-cat{font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+  .skill-card-desc{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+  /* Skill detail modal */
+  #skill-detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px)}
+  #skill-detail-modal.open{display:flex}
+  .skill-modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:100%;max-width:800px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.55)}
+  .skill-modal-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .skill-modal-header-left{display:flex;align-items:center;gap:10px;min-width:0}
+  .skill-modal-title{font-weight:700;font-size:15px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .skill-modal-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;flex-shrink:0}
+  .skill-modal-badge.enabled{background:#16a34a22;color:#4ade80;border:1px solid #16a34a55}
+  .skill-modal-badge.disabled{background:#9ca3af22;color:#9ca3af;border:1px solid #9ca3af44}
+  .skill-modal-header-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .skill-modal-copy{background:var(--border);border:none;color:var(--text);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:background .15s}
+  .skill-modal-copy:hover{background:var(--accent);color:#000}
+  .skill-modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;transition:background .15s}
+  .skill-modal-close:hover{background:var(--border);color:var(--text)}
+  .skill-modal-meta{padding:10px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;background:var(--bg)}
+  .skill-modal-cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:99px;background:var(--accent)22;color:var(--accent);border:1px solid var(--accent)44}
+  .skill-modal-path{font-size:10px;color:var(--muted);font-family:'SF Mono',Monaco,Menlo,monospace}
+  .skill-modal-desc{font-size:12px;color:var(--text);opacity:.75;flex:1;min-width:200px}
+  .skill-modal-body{overflow:auto;padding:20px 22px;flex:1}
+  /* ── Card Detail Modal ── */
+  #card-detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+  #card-detail-modal.open{display:flex}
+  .card-modal-box{background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;width:90%;min-width:540px;max-width:780px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 28px 72px rgba(0,0,0,.28);animation:cdIn .18s cubic-bezier(.22,1,.36,1)}
+  @keyframes cdIn{from{opacity:0;transform:translateY(-12px) scale(.96)}to{opacity:1;transform:none}}
+
+  /* Header — view vs edit mode */
+  .card-modal-header{display:flex;align-items:center;gap:10px;padding:18px 22px 16px;border-bottom:1px solid #e2e8f0;flex-shrink:0;background:#ffffff;transition:border-color .2s}
+  .card-modal-box.editing .card-modal-header{border-bottom-color:var(--accent);background:linear-gradient(135deg,#f5f3ff 0%,#ffffff 60%)}
+  .card-modal-header-left{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
+  .card-modal-col-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;flex-shrink:0;white-space:nowrap;letter-spacing:.04em}
+  .card-modal-header-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+  /* Title — view */
+  #cd-title-view{font-weight:700;font-size:18px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;line-height:1.3}
+
+  /* Title — edit input */
+  #cd-title-input{flex:1;padding:8px 12px;border:2px solid var(--accent);border-radius:9px;font-size:18px;font-weight:700;background:#fff;color:#0f172a;outline:none;display:none;font-family:inherit;transition:border-color .15s,box-shadow .15s;box-shadow:0 0 0 4px rgba(124,58,237,.12);line-height:1.3}
+  #cd-title-input:focus{border-color:var(--accent2);box-shadow:0 0 0 5px rgba(124,58,237,.18)}
+
+  /* Edit / View toggle button */
+  .card-modal-edit-btn{display:flex;align-items:center;gap:5px;padding:5px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#f8fafc;color:#64748b;font-family:inherit;transition:all .15s}
+  .card-modal-edit-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .card-modal-box.editing .card-modal-edit-btn{background:var(--accent)18;color:var(--accent);border-color:var(--accent)55}
+  .card-modal-close{background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;line-height:1;padding:4px 7px;border-radius:6px;transition:background .12s,color .12s}
+  .card-modal-close:hover{background:#f1f5f9;color:#0f172a}
+
+  /* Edit mode banner strip */
+  .card-modal-edit-banner{display:none;align-items:center;gap:6px;padding:6px 22px;background:var(--accent)0e;border-bottom:1px solid var(--accent)33;font-size:11px;font-weight:600;color:var(--accent);letter-spacing:.04em;flex-shrink:0}
+  .card-modal-edit-banner svg{flex-shrink:0}
+  .card-modal-box.editing .card-modal-edit-banner{display:flex}
+
+  /* Meta bar */
+  .card-modal-meta{padding:11px 22px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex-shrink:0;background:#f9fafb}
+  .card-modal-meta-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;font-weight:500}
+  .card-modal-meta-item strong{color:#374151;font-weight:600}
+
+  /* Priority chip (view) */
+  #cd-pri-view{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px}
+
+  /* Priority select (edit) */
+  #cd-priority{font-size:12px;font-weight:600;padding:4px 28px 4px 10px;border:1.5px solid #e2e8f0;border-radius:7px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E") no-repeat right 9px center;color:#374151;outline:none;cursor:pointer;font-family:inherit;appearance:none;-webkit-appearance:none;transition:border-color .15s,box-shadow .15s}
+  #cd-priority:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,58,237,.13)}
+
+  /* Body */
+  .card-modal-body{overflow-y:auto;padding:0;flex:1;background:#ffffff}
+
+  /* Field rows inside body */
+  .cd-field{padding:18px 22px;border-bottom:1px solid #f1f5f9}
+  .cd-field:last-child{border-bottom:none}
+  .cd-field-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:7px}
+  .card-modal-box.editing .cd-field-label{color:var(--accent);opacity:.8}
+
+  /* Notes — view */
+  #cd-notes-view{font-size:13.5px;line-height:1.75;color:#374151;white-space:pre-wrap;word-break:break-word;min-height:60px}
+  #cd-notes-view:empty::before{content:'No description yet.';color:#94a3b8;font-style:italic}
+
+  /* Notes — edit textarea */
+  #cd-notes-edit{width:100%;min-height:160px;padding:12px 14px;border:2px solid #e2e8f0;border-radius:9px;font-size:13.5px;line-height:1.75;resize:vertical;outline:none;font-family:inherit;background:#fafafa;color:#0f172a;display:none;box-sizing:border-box;transition:border-color .15s,box-shadow .15s,background .15s}
+  #cd-notes-edit:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(124,58,237,.11);background:#fff}
+  #cd-notes-label{display:none} /* replaced by .cd-field-label */
+
+  /* Footer */
+  .card-modal-footer{padding:14px 22px;border-top:1px solid #e2e8f0;display:none;gap:8px;align-items:center;flex-shrink:0;background:#f9fafb}
+  .card-modal-footer.show{display:flex}
+  .card-modal-save{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,box-shadow .15s,transform .1s;font-family:inherit;letter-spacing:.02em}
+  .card-modal-save:hover{background:var(--accent2);box-shadow:0 4px 14px rgba(124,58,237,.38);transform:translateY(-1px)}
+  .card-modal-save:active{transform:translateY(0);box-shadow:none}
+  .card-modal-cancel{background:#fff;color:#64748b;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s,color .15s,border-color .15s}
+  .card-modal-cancel:hover{background:#f1f5f9;color:#0f172a;border-color:#cbd5e1}
+  .card-modal-saved{font-size:12px;color:#16a34a;display:none;align-items:center;gap:5px;margin-left:auto;font-weight:600}
+  .card-modal-saved.show{display:flex}
+  /* Markdown rendered content */
+  .skill-modal-md{font-size:13px;line-height:1.7;color:var(--text)}
+  .skill-modal-md h1{font-size:18px;font-weight:700;color:var(--accent);margin:0 0 14px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .skill-modal-md h2{font-size:15px;font-weight:700;color:var(--text);margin:20px 0 8px}
+  .skill-modal-md h3{font-size:13px;font-weight:700;color:var(--accent);margin:16px 0 6px;opacity:.9}
+  .skill-modal-md h4{font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.05em}
+  .skill-modal-md p{margin:0 0 10px}
+  .skill-modal-md ul,.skill-modal-md ol{margin:0 0 10px;padding-left:20px}
+  .skill-modal-md li{margin-bottom:3px}
+  .skill-modal-md code{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:11px;color:#f97316}
+  .skill-modal-md pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0 0 12px}
+  .skill-modal-md pre code{background:none;border:none;padding:0;color:#e2e8f0;font-size:11.5px}
+  .skill-modal-md blockquote{border-left:3px solid var(--accent);padding:6px 12px;margin:0 0 10px;background:var(--accent)0d;border-radius:0 4px 4px 0;color:var(--muted)}
+  .skill-modal-md hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+  .skill-modal-md strong{color:var(--text);font-weight:700}
+  .skill-modal-md em{font-style:italic;color:var(--muted)}
+  .skill-modal-md a{color:var(--accent);text-decoration:none}
+  .skill-modal-md a:hover{text-decoration:underline}
+  .skill-modal-md .yaml-front{display:none}
+  .skill-modal-loading{color:var(--muted);font-size:13px;padding:20px 0;text-align:center}
+  /* Toggle switch */
+  .skill-toggle{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+  .skill-toggle input{opacity:0;width:0;height:0}
+  .skill-toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#cbd5e1;border-radius:20px;transition:.2s}
+  .skill-toggle-slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+  .skill-toggle input:checked + .skill-toggle-slider{background:var(--accent)}
+  .skill-toggle input:checked + .skill-toggle-slider:before{transform:translateX(16px)}
+  .skill-toggle input:disabled + .skill-toggle-slider{opacity:.6;cursor:not-allowed}
+  /* Status dot */
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .dot-ok{background:var(--ok)}
+  .dot-err{background:var(--err)}
+  .dot-pending{background:var(--warn)}
+  /* Config viewer */
+  .config-viewer{background:#0f172a;color:#a5f3fc;border-radius:8px;padding:14px;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:12px;line-height:1.6;max-height:600px;overflow:auto;white-space:pre-wrap;word-wrap:break-word}
+  /* Responsive tweaks */
+  @media(max-width:900px){
+    #sidebar{width:56px;min-width:56px}
+    #sidebar h1{display:none}
+    .nav-item span:not(.icon){display:none}
+    .nav-item{padding:10px;justify-content:center}
+    .nav-item .icon{font-size:18px}
+  }
+  /* Refresh */
+  .refresh-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;font-size:11px;border-radius:6px}
+  .refresh-btn:hover{color:var(--text);border-color:var(--accent)}
+  /* Run button */
+  .btn-run{background:#ede9fe;color:#6d28d9;border-color:#c4b5fd;font-weight:600}
+  .btn-run:hover{background:#ddd6fe}
+  .btn-run:disabled{background:#f1f5f9;color:var(--muted);border-color:var(--border);cursor:not-allowed}
+  .btn-edit{background:#fef9c3;color:#92400e;border-color:#fde68a;font-weight:600}
+  .btn-edit:hover{background:#fef08a}
+  .btn-delete{background:#fee2e2;color:#991b1b;border-color:#fca5a5;font-weight:600}
+  .btn-delete:hover{background:#fecaca}
+  .btn-pause{background:#e0f2fe;color:#075985;border-color:#7dd3fc;font-weight:600}
+  .btn-pause:hover{background:#bae6fd}
+  .action-group{display:flex;gap:4px;flex-wrap:wrap}
+  /* Edit modal form */
+  .edit-form label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+  .edit-form input,.edit-form textarea,.edit-form select{width:100%;box-sizing:border-box;background:#1e293b;border:1px solid var(--border);border-radius:6px;color:#f1f5f9;padding:8px 10px;font-size:13px;font-family:inherit}
+  .edit-form textarea{resize:vertical;min-height:100px}
+  .edit-form input:focus,.edit-form textarea:focus{outline:none;border-color:#7c3aed}
+  .edit-form .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
+  .btn-primary{background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{background:#6d28d9}
+  .btn-secondary{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn-secondary:hover{background:#1e293b}
+  /* Run log modal */
+  .run-log{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:14px;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:12px;line-height:1.6;height:360px;overflow:auto;white-space:pre-wrap;word-wrap:break-word;margin-top:12px}
+  .run-status{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid #c4b5fd;border-top-color:#7c3aed;border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* Empty state */
+  .empty{text-align:center;color:var(--muted);padding:40px;font-size:13px}
+  /* YAML lint status bar */
+  #cm-lint-status{display:flex;align-items:center;gap:6px;padding:5px 12px;font-size:11px;font-family:'SF Mono',Monaco,Menlo,Consolas,monospace;border-top:1px solid #1e293b;background:#0a1020;min-height:26px;border-radius:0 0 6px 6px;transition:all .2s}
+  #cm-lint-status.ok{color:#4ade80}
+  #cm-lint-status.error{color:#f87171}
+  #cm-lint-status.empty{color:var(--muted);padding:5px 12px;font-size:11px}
+  /* CM lint gutter + underline overrides */
+  .cm-lint-marker-error{color:#f87171 !important}
+  .cm-lint-marker-warning{color:#fbbf24 !important}
+  .cm-lintRange-error{text-decoration-color:#f87171 !important;text-decoration-style:wavy}
+  .cm-lintRange-warning{text-decoration-color:#fbbf24 !important;text-decoration-style:wavy}
+  .cm-diagnostic-error{border-left:3px solid #f87171;background:rgba(248,113,113,.08)}
+  .cm-diagnostic-warning{border-left:3px solid #fbbf24;background:rgba(251,191,36,.08)}
+  .cm-tooltip-lint{background:#1e293b !important;border:1px solid #f87171 !important;color:#f1f5f9 !important;font-size:12px;border-radius:4px}
+</style>
+
+<!-- js-yaml for real-time YAML validation -->
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+
+<!-- CodeMirror 6 — YAML syntax highlighting + linting -->
+<script type="module">
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection } from 'https://esm.sh/@codemirror/view@6';
+import { EditorState } from 'https://esm.sh/@codemirror/state@6';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from 'https://esm.sh/@codemirror/commands@6';
+import { yaml } from 'https://esm.sh/@codemirror/lang-yaml@6';
+import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6';
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap } from 'https://esm.sh/@codemirror/language@6';
+import { searchKeymap, highlightSelectionMatches } from 'https://esm.sh/@codemirror/search@6';
+import { lintKeymap, linter, lintGutter, forceLinting } from 'https://esm.sh/@codemirror/lint@6';
+
+let _cmView = null;
+
+// ── YAML linter ──────────────────────────────────────────────────────────────
+function yamlLinter(view) {
+  const doc = view.state.doc.toString();
+  const bar = document.getElementById('cm-lint-status');
+  if (!doc.trim()) {
+    if (bar) { bar.className = 'empty'; bar.innerHTML = ''; }
+    return [];
+  }
+  try {
+    jsyaml.loadAll(doc);   // supports multi-doc (---) files
+    if (bar) { bar.className = 'ok'; bar.innerHTML = '<span>✓</span> Valid YAML'; }
+    return [];
+  } catch (e) {
+    // js-yaml error has .mark.line / .mark.column (0-based)
+    const line  = (e.mark && e.mark.line  != null) ? e.mark.line  : 0;
+    const col   = (e.mark && e.mark.column != null) ? e.mark.column : 0;
+    const cmLine = view.state.doc.line(Math.min(line + 1, view.state.doc.lines));
+    const from  = cmLine.from + Math.min(col, cmLine.length);
+    const to    = Math.min(from + Math.max(cmLine.length - col, 1), view.state.doc.length);
+    // Clean up message (remove the "at line X, column Y" suffix since we show it separately)
+    const msg = e.reason || e.message || String(e);
+    if (bar) {
+      bar.className = 'error';
+      bar.innerHTML = `<span>✗</span> Line ${line + 1}, col ${col + 1}: ${msg}`;
+    }
+    return [{ from, to, severity: 'error', message: `${msg}\n(line ${line + 1}, column ${col + 1})` }];
+  }
+}
+
+// Expose for forceLinting after external content load
+window._cmForceLint = function() { if (_cmView) forceLinting(_cmView); };
+
+// Custom dark theme that matches the dashboard UI
+const dashTheme = EditorView.theme({
+  '&': { background: '#0f172a', color: '#a5f3fc', height: '100%', fontSize: '12px', fontFamily: "'SF Mono',Monaco,Menlo,Consolas,monospace" },
+  '.cm-content': { caretColor: '#7c3aed', padding: '12px 0', lineHeight: '1.75' },
+  '.cm-cursor': { borderLeftColor: '#a855f7', borderLeftWidth: '2px' },
+  '.cm-focused': { outline: 'none' },
+  '.cm-gutters': { background: '#0a1020', color: '#475569', border: 'none', borderRight: '1px solid #1e293b' },
+  '.cm-activeLineGutter': { background: '#1e293b' },
+  '.cm-activeLine': { background: 'rgba(124,58,237,.08)' },
+  '.cm-selectionBackground, ::selection': { background: 'rgba(124,58,237,.35) !important' },
+  '.cm-matchingBracket': { background: 'rgba(168,85,247,.3)', color: '#f0abfc !important' },
+  '.cm-foldGutter': { width: '14px' },
+  '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px 0 6px', minWidth: '36px' },
+  '.cm-scroller': { overflow: 'auto' },
+}, { dark: true });
+
+window._cmInit = function(value, onChange) {
+  const mount = document.getElementById('cm-editor-mount');
+  if (!mount) return;
+  // Destroy previous instance
+  if (_cmView) { _cmView.destroy(); _cmView = null; }
+  const state = EditorState.create({
+    doc: value || '',
+    extensions: [
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      highlightActiveLine(),
+      drawSelection(),
+      bracketMatching(),
+      foldGutter(),
+      history(),
+      highlightSelectionMatches(),
+      yaml(),
+      lintGutter(),
+      linter(yamlLinter, { delay: 300 }),
+      oneDark,
+      dashTheme,
+      keymap.of([...defaultKeymap, ...historyKeymap, ...foldKeymap, ...searchKeymap, ...lintKeymap, indentWithTab]),
+      EditorView.updateListener.of(update => {
+        if (update.docChanged && typeof onChange === 'function') onChange(update.state.doc.toString());
+      }),
+      EditorView.lineWrapping,
+    ],
+  });
+  _cmView = new EditorView({ state, parent: mount });
+  // focus after next paint
+  requestAnimationFrame(() => _cmView && _cmView.focus());
+};
+
+window._cmGetValue = function() {
+  return _cmView ? _cmView.state.doc.toString() : '';
+};
+
+window._cmDestroy = function() {
+  if (_cmView) { _cmView.destroy(); _cmView = null; }
+};
+</script>
+</head>
+<body>
+
+<nav id="sidebar">
+  <h1>🪬 <span>Mission</span> Control</h1>
+  <div class="nav-item active" onclick="show('cron')" data-tab="cron"><span class="icon">📅</span> <span>Cron Jobs</span></div>
+  <div class="nav-item" onclick="show('kanban')" data-tab="kanban"><span class="icon">🗂</span> <span>Kanban</span></div>
+  <div class="nav-item" onclick="show('skills')" data-tab="skills"><span class="icon">🧠</span> <span>Skills</span></div>
+  <div class="nav-item" onclick="show('memory')" data-tab="memory"><span class="icon">💾</span> <span>Memory</span></div>
+  <div class="nav-item" onclick="show('config')" data-tab="config"><span class="icon">⚙️</span> <span>Config</span></div>
+  <div class="nav-item" onclick="show('status')" data-tab="status"><span class="icon">🖥</span> <span>Agent Status</span></div>
+  <div class="nav-item" onclick="show('analytics')" data-tab="analytics"><span class="icon">📊</span> <span>Analytics</span></div>
+  <div class="nav-item" onclick="show('sessions')" data-tab="sessions"><span class="icon">💬</span> <span>Sessions</span></div>
+  <div class="nav-item" onclick="show('logs')" data-tab="logs"><span class="icon">📜</span> <span>Logs</span></div>
+</nav>
+
+<div id="main">
+
+  <!-- CRON JOBS -->
+  <div id="tab-cron" class="tab active">
+    <div class="section-header">
+      <h2>📅 Cron Jobs</h2>
+      <button class="refresh-btn" onclick="loadCron()">↻ Refresh</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Schedule</th><th>Next Run</th><th>Last Run</th><th>Last Status</th><th>Deliver</th><th>Enabled</th><th>Actions</th></tr></thead>
+      <tbody id="cron-rows"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+    </table>
+
+    <div class="section-header" style="margin-top:28px">
+      <h3>📋 Run History</h3>
+    </div>
+    <div id="cron-history"><p class="empty">Loading…</p></div>
+  </div>
+
+  <!-- KANBAN -->
+  <div id="tab-kanban" class="tab">
+    <div class="section-header">
+      <h2>🗂 Kanban Board</h2>
+      <button class="btn-primary btn-sm" onclick="openAddCard()">+ Add Card</button>
+      <button class="btn-secondary btn-sm" onclick="openArchive()">📦 Archive</button>
+    </div>
+    <div id="kanban-board"></div>
+  </div>
+
+  <!-- SKILLS -->
+  <div id="tab-skills" class="tab">
+    <div class="section-header">
+      <h2>🧠 Skills Library</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="position:relative">
+          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#64748b;font-size:14px;pointer-events:none">🔍</span>
+          <input
+            id="skills-search"
+            type="search"
+            placeholder="Search skills…"
+            oninput="filterSkills(this.value)"
+            style="padding:6px 10px 6px 30px;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#f1f5f9;font-size:13px;width:220px;outline:none;transition:border-color .2s"
+            onfocus="this.style.borderColor='#38bdf8'"
+            onblur="this.style.borderColor='#334155'"
+          />
+        </div>
+        <button class="refresh-btn" onclick="loadSkills()">↻ Refresh</button>
+        <button class="btn-primary btn-sm" onclick="openSkillsHub()" style="background:#7c3aed;border-color:#7c3aed">📦 Browse Hub</button>
+      </div>
+    </div>
+    <div id="skills-search-status" style="font-size:12px;color:#64748b;margin-bottom:8px;display:none"></div>
+    <div id="skills-content"><p class="empty">Loading…</p></div>
+  </div>
+
+  <!-- SKILLS HUB MODAL -->
+  <div id="skills-hub-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+    <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;width:min(700px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,.5)">
+      <!-- Header -->
+      <div style="padding:18px 20px 14px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:#f1f5f9">📦 Skills Hub</h3>
+          <p style="margin:4px 0 0;font-size:12px;color:#64748b">Browse and install skills from the registry</p>
+        </div>
+        <button onclick="closeSkillsHub()" style="background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px" title="Close">✕</button>
+      </div>
+      <!-- Search bar -->
+      <div style="padding:14px 20px;border-bottom:1px solid #334155;display:flex;gap:8px">
+        <div style="position:relative;flex:1">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#64748b;font-size:14px;pointer-events:none">🔍</span>
+          <input id="hub-search-input" type="search" placeholder="Search hub for skills…"
+            style="width:100%;padding:8px 12px 8px 34px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#f1f5f9;font-size:13px;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#334155'"
+            onkeydown="if(event.key==='Enter')hubSearch()" />
+        </div>
+        <button class="btn-primary btn-sm" onclick="hubSearch()" style="background:#7c3aed;border-color:#7c3aed;white-space:nowrap">Search</button>
+        <button class="btn-secondary btn-sm" onclick="hubBrowse(1)" style="white-space:nowrap">Browse All</button>
+      </div>
+      <!-- Results -->
+      <div id="hub-results" style="flex:1;overflow-y:auto;padding:14px 20px">
+        <p style="color:#64748b;font-size:13px;text-align:center;margin-top:40px">Search for a skill or click "Browse All" to explore the registry.</p>
+      </div>
+      <!-- Pagination -->
+      <div id="hub-pagination" style="padding:10px 20px;border-top:1px solid #334155;display:none;align-items:center;justify-content:center;gap:10px">
+        <button id="hub-prev" class="btn-secondary btn-sm" onclick="hubBrowse(_hubPage-1)">← Prev</button>
+        <span id="hub-page-label" style="font-size:12px;color:#64748b"></span>
+        <button id="hub-next" class="btn-secondary btn-sm" onclick="hubBrowse(_hubPage+1)">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMORY -->
+  <div id="tab-memory" class="tab">
+    <div class="section-header">
+      <h2>💾 Agent Memory</h2>
+      <button class="refresh-btn" onclick="loadMemory()">↻ Refresh</button>
+    </div>
+    <div id="memory-content"><p class="empty">Loading…</p></div>
+  </div>
+
+  <!-- CONFIG -->
+  <div id="tab-config" class="tab">
+    <div class="section-header">
+      <h2>⚙️ Hermes Config</h2>
+      <div style="display:flex;gap:8px">
+        <button class="refresh-btn" onclick="loadConfig()">↻ Refresh</button>
+        <button class="refresh-btn" style="background:#854d0e;color:#fef08a;border-color:#a16207" onclick="openConfigEdit()">✏️ Edit</button>
+      </div>
+    </div>
+    <div id="config-content"><p class="empty">Loading…</p></div>
+  </div>
+
+  <!-- CONFIG EDIT MODAL -->
+  <div id="config-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:none;align-items:center;justify-content:center">
+    <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;width:min(820px,95vw);height:85vh;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 60px #000a">
+      <!-- header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #334155">
+        <div>
+          <div style="font-weight:700;font-size:15px">✏️ Edit Config</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">📁 ~/.hermes/config.yaml &nbsp;·&nbsp; A backup (.bak) is saved automatically before every save</div>
+        </div>
+        <button onclick="closeConfigEdit()" style="background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px" title="Close">✕</button>
+      </div>
+      <!-- editor / diff toggle tabs -->
+      <div style="display:flex;gap:0;padding:10px 20px 0;border-bottom:1px solid #334155">
+        <button id="cfg-tab-edit" onclick="cfgShowTab('edit')"
+          style="padding:6px 18px;border-radius:8px 8px 0 0;border:1px solid #334155;border-bottom:none;background:#0f172a;color:#a5f3fc;font-size:12px;cursor:pointer;font-weight:600">✎ Edit</button>
+        <button id="cfg-tab-diff" onclick="cfgShowTab('diff')"
+          style="padding:6px 18px;border-radius:8px 8px 0 0;border:1px solid #334155;border-bottom:none;background:#1e293b;color:#64748b;font-size:12px;cursor:pointer;margin-left:4px">🔍 Diff</button>
+      </div>
+      <!-- editor pane -->
+      <div id="cfg-pane-edit" style="flex:1;overflow:hidden;padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+        <!-- editor + live lint status bar -->
+        <div style="flex:1;min-height:0;border:1px solid #334155;border-radius:8px;overflow:hidden;background:#0f172a;display:flex;flex-direction:column">
+          <div id="cm-editor-mount" style="flex:1;min-height:0;overflow:auto"></div>
+          <div id="cm-lint-status" class="empty"></div>
+        </div>
+      </div>
+      <!-- diff pane -->
+      <div id="cfg-pane-diff" style="flex:1;overflow:hidden;padding:16px 20px;display:none;flex-direction:column;gap:8px">
+        <div id="cfg-diff-stats" style="font-size:11px;color:#64748b"></div>
+        <pre id="cfg-diff-view"
+          style="flex:1;overflow-y:auto;background:#0a0f1a;border:1px solid #334155;border-radius:8px;padding:14px;font-family:'SF Mono',Monaco,Menlo,monospace;font-size:11.5px;line-height:1.75;margin:0;white-space:pre;min-height:400px;max-height:52vh"></pre>
+      </div>
+      <!-- footer -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px;border-top:1px solid #334155">
+        <!-- left: restore -->
+        <button onclick="restoreConfigFromBackup()" id="cfg-restore-btn"
+          style="background:#1e293b;border:1px solid #92400e;color:#fbbf24;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px"
+          title="Load config.yaml.bak into the editor">↩ Restore from Backup</button>
+        <!-- right: cancel / diff / save -->
+        <div style="display:flex;gap:10px;align-items:center">
+          <button onclick="closeConfigEdit()" style="background:#1e293b;border:1px solid #475569;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Cancel</button>
+          <button onclick="cfgShowTab('diff')" id="cfg-preview-btn"
+            style="background:#1e3a5f;border:1px solid #2563eb;color:#93c5fd;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">🔍 Preview Diff</button>
+          <button onclick="saveConfig()" style="background:#16a34a;border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">💾 Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENT STATUS -->
+  <div id="tab-status" class="tab">
+    <div class="section-header">
+      <h2>🖥 Agent Status</h2>
+      <button class="refresh-btn" onclick="loadAgentStatus()">↻ Refresh</button>
+    </div>
+    <div id="status-content"><p class="empty">Loading…</p></div>
+  </div>
+
+  <!-- ── Analytics Tab ─────────────────────────────────── -->
+  <div id="tab-analytics" class="tab">
+    <div class="section-header">
+      <h2>📊 Analytics</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="analytics-period" onchange="loadAnalytics()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
+          <option value="7">7 Days</option>
+          <option value="30" selected>30 Days</option>
+          <option value="90">90 Days</option>
+        </select>
+        <button class="refresh-btn" onclick="loadAnalytics()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="analytics-content"><p class="empty">Loading…</p></div>
+  </div>
+
+  <!-- ── Sessions Tab ───────────────────────────────────── -->
+  <div id="tab-sessions" class="tab">
+    <div class="section-header">
+      <h2>💬 Sessions</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="sessions-search" type="text" placeholder="Search…" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px;width:200px" onkeyup="if(event.key==='Enter')loadSessions(0)">
+        <button class="refresh-btn" onclick="loadSessions(0)">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="sessions-content"><p class="empty">Loading…</p></div>
+    <div id="sessions-pagination" style="display:flex;gap:8px;justify-content:center;margin-top:16px"></div>
+  </div>
+
+  <!-- ── Logs Tab ───────────────────────────────────────── -->
+  <div id="tab-logs" class="tab">
+    <div class="section-header">
+      <h2>📜 Logs</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="logs-file" onchange="loadLogs()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
+          <option value="agent">agent</option>
+          <option value="errors">errors</option>
+          <option value="gateway">gateway</option>
+        </select>
+        <select id="logs-level" onchange="loadLogs()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
+          <option value="all">All levels</option>
+          <option value="info">INFO</option>
+          <option value="warning">WARNING</option>
+          <option value="error">ERROR</option>
+        </select>
+        <select id="logs-lines" onchange="loadLogs()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
+          <option value="50">50 lines</option>
+          <option value="100" selected>100 lines</option>
+          <option value="200">200 lines</option>
+          <option value="500">500 lines</option>
+        </select>
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px">
+          <input type="checkbox" id="logs-autorefresh" onchange="toggleLogsAutoRefresh()"> Auto
+        </label>
+        <button class="refresh-btn" onclick="loadLogs()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="logs-content" style="background:#0b1220;border-radius:10px;padding:16px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0;max-height:600px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><span style="color:#6b7280">Loading…</span></div>
+  </div>
+
+</div>
+
+<!-- Modal -->
+<div id="modal">
+  <div class="modal-box">
+    <div id="modal-content"></div>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="closeModal()">Close</button>
+      <button id="modal-action-btn" class="btn-primary" style="display:none">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+const API = '';
+
+// ── Navigation ────────────────────────────────────────────────
+function show(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  // Lazy load
+  if (tab === 'cron') loadCron();
+  if (tab === 'kanban') loadKanban();
+  if (tab === 'skills') loadSkills();
+  if (tab === 'memory') loadMemory();
+  if (tab === 'config') loadConfig();
+  if (tab === 'status') loadAgentStatus();
+  if (tab === 'analytics') loadAnalytics();
+  if (tab === 'sessions') loadSessions(0);
+  if (tab === 'logs') loadLogs();
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, dur = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.background = '#0b1220';
+  el.style.color = '#fff';
+  setTimeout(() => { el.style.display = 'none'; }, dur);
+}
+// Alias used across the app — supports optional type: 'warn' | 'info' | 'error'
+function showToast(msg, type, dur = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  // colour-code by type
+  if (type === 'warn')       { el.style.background = '#92400e'; el.style.color = '#fef3c7'; }
+  else if (type === 'error') { el.style.background = '#7f1d1d'; el.style.color = '#fee2e2'; }
+  else if (type === 'info')  { el.style.background = '#1e3a5f'; el.style.color = '#dbeafe'; }
+  else                       { el.style.background = '#0b1220'; el.style.color = '#fff'; }
+  clearTimeout(el._toastTimer);
+  el._toastTimer = setTimeout(() => { el.style.display = 'none'; }, dur);
+}
+
+// ── Modal ─────────────────────────────────────────────────────
+function openModal(html, actionLabel, actionFn) {
+  document.getElementById('modal-content').innerHTML = html;
+  const btn = document.getElementById('modal-action-btn');
+  if (actionFn) {
+    btn.style.display = '';
+    btn.textContent = actionLabel || 'Save';
+    btn.onclick = actionFn;
+  } else {
+    btn.style.display = 'none';
+  }
+  // Always re-enable the close button — it may have been disabled by a cron run
+  const closeBtn = document.querySelector('#modal .modal-box button');
+  if (closeBtn) closeBtn.disabled = false;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  // Always re-enable the close button — it may have been disabled by a cron run
+  const closeBtn = document.querySelector('#modal .modal-box button');
+  if (closeBtn) closeBtn.disabled = false;
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+// ── Utilities ─────────────────────────────────────────────────
+function fmt(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-NZ', { timeZone: 'Pacific/Auckland', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase();
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('en-NZ', { timeZone: 'Pacific/Auckland', hour: '2-digit', minute: '2-digit', hour12: true });
+}
+function fmtDur(ms) {
+  if (!ms) return '—';
+  if (ms < 1000) return ms + 'ms';
+  return (ms / 1000).toFixed(1) + 's';
+}
+function fmtTokens(total, input, output, cacheRead) {
+  if (!total) return '<span style="color:var(--muted)">—</span>';
+  const fmt = n => n >= 1000 ? (n/1000).toFixed(1) + 'k' : String(n);
+  let tip = '';
+  if (input || output || cacheRead) {
+    const parts = [];
+    if (input)     parts.push(`↑ in: ${fmt(input)}`);
+    if (output)    parts.push(`↓ out: ${fmt(output)}`);
+    if (cacheRead) parts.push(`♻ cache: ${fmt(cacheRead)}`);
+    tip = `title="${parts.join('  ')}"`;
+  }
+  return `<span class="token-badge" ${tip}>🔢 ${fmt(total)}</span>`;
+}
+function statusBadge(s) {
+  if (!s) return '<span class="badge badge-idle">—</span>';
+  if (s === 'ok') return '<span class="badge badge-ok">✅ ok</span>';
+  if (s === 'error' || s === 'failed') return '<span class="badge badge-error">❌ failed</span>';
+  if (s === 'running') return '<span class="badge badge-running">⚡ running</span>';
+  return `<span class="badge badge-pending">${s}</span>`;
+}
+
+// ── CRON JOBS ─────────────────────────────────────────────────
+async function loadCron() {
+  // Load jobs
+  try {
+    const jobs = await fetch('/api/cron/jobs').then(r => r.json());
+    const tbody = document.getElementById('cron-rows');
+    if (!jobs.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">No cron jobs found</td></tr>';
+    } else {
+      tbody.innerHTML = jobs.map(j => {
+        const sched = j.schedule_display || j.schedule?.expr || j.schedule?.display || '—';
+        const dot = j.enabled ? '<span class="dot dot-ok"></span>' : '<span class="dot"></span>';
+        return `<tr>
+          <td style="font-weight:600;cursor:pointer" class="cron-name-cell" data-job="${escAttr(JSON.stringify(j))}">${j.name || j.id}</td>
+          <td style="font-family:monospace;font-size:12px">${sched}</td>
+          <td>${fmt(j.next_run_at)}</td>
+          <td>${fmt(j.last_run_at)}</td>
+          <td>${statusBadge(j.last_status)}</td>
+          <td style="font-size:11px;color:var(--muted)">${j.deliver || '—'}</td>
+          <td>${dot}${j.enabled ? '<span style="color:var(--ok);font-size:12px">Active</span>' : '<span style="color:var(--muted);font-size:12px">Paused</span>'}</td>
+          <td><div class="action-group"><button class="btn-sm btn-run" data-jobid="${j.id}" data-jobname="${escAttr(j.name||j.id)}" title="Run now">▶ Run</button><button class="btn-sm btn-pause" data-jobid="${j.id}" data-enabled="${j.enabled}">${j.enabled ? '⏸ Pause' : '▶ Resume'}</button><button class="btn-sm btn-edit" data-editjob="${escAttr(JSON.stringify(j))}" title="Edit">✏️ Edit</button><button class="btn-sm btn-delete" data-jobid="${j.id}" data-jobname="${escAttr(j.name||j.id)}" title="Delete">🗑 Del</button></div></td>
+        </tr>`;
+      }).join('');
+    }
+  } catch (e) {
+    document.getElementById('cron-rows').innerHTML = `<tr><td colspan="7" class="empty">Error: ${e.message}</td></tr>`;
+  }
+
+  // Load history
+  try {
+    const history = await fetch('/api/cron/history?limit=100').then(r => r.json());
+    const el = document.getElementById('cron-history');
+    if (!history.length) {
+      el.innerHTML = '<p class="empty">No run history found</p>';
+      return;
+    }
+
+    // Group by date
+    const groups = {};
+    for (const run of history) {
+      const dateKey = fmtDate(run.runAt);
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(run);
+    }
+
+    el.innerHTML = Object.entries(groups).map(([date, runs]) => `
+      <div class="history-group">
+        <div class="history-date">${date}</div>
+        <table>
+          <thead><tr><th>Job Name</th><th>Time</th><th>Status</th><th>Duration</th><th>Tokens</th><th>Model</th><th>Output</th></tr></thead>
+          <tbody>
+            ${runs.map(r => `<tr>
+              <td style="font-weight:500">${r.jobName}</td>
+              <td>${fmtTime(r.runAt)}</td>
+              <td>${statusBadge(r.status)}</td>
+              <td>${fmtDur(r.durationMs)}</td>
+              <td>${fmtTokens(r.tokens, r.tokensIn, r.tokensOut, r.tokensCacheRead)}</td>
+              <td style="font-size:11px;color:var(--muted)">${r.model || '—'}</td>
+              <td><button class="btn-sm" data-jobid="${r.jobId}" data-runat="${r.runAt || ''}" onclick="showOutput(this.dataset.jobid,this.dataset.runat)">📄 View</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('cron-history').innerHTML = `<p class="empty">Error loading history: ${e.message}</p>`;
+  }
+}
+
+function showCronPrompt(jsonStr) {
+  const j = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+  openModal(`
+    <h3>📅 ${j.name || j.id}</h3>
+    <label>Job ID</label>
+    <pre style="font-size:11px;color:var(--muted)">${j.id}</pre>
+    <label>Schedule</label>
+    <pre>${j.schedule_display || j.schedule?.expr || '—'}</pre>
+    <label>Prompt</label>
+    <pre>${j.prompt || '(no prompt)'}</pre>
+    ${j.model ? `<label>Model</label><pre>${j.model}</pre>` : ''}
+    ${j.deliver ? `<label>Deliver To</label><pre>${j.deliver}</pre>` : ''}
+  `);
+}
+
+async function showOutput(jobId, runAt) {
+  openModal(`<h3>📄 Loading output…</h3><div class="output-viewer">Please wait…</div>`);
+  try {
+    const params = runAt ? `?runAt=${encodeURIComponent(runAt)}` : '';
+    const data = await fetch(`/api/cron/output/${jobId}${params}`).then(r => r.json());
+    if (!data.content) {
+      openModal(`<h3>📄 No Output</h3><p style="color:var(--muted)">No output file found for this run.</p>`);
+      return;
+    }
+    openModal(`<h3>📄 Job Output — ${data.file || ''}</h3><div class="output-viewer">${escHtml(data.content)}</div>`);
+  } catch (e) {
+    openModal(`<h3>📄 Error</h3><p style="color:var(--err)">${e.message}</p>`);
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) {
+  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── RUN JOB ───────────────────────────────────────────────────
+async function runJob(jobId, jobName) {
+  // Build modal with live log area
+  openModal(`
+    <h3>▶ Running: ${escHtml(jobName)}</h3>
+    <div class="run-status"><span class="spinner" id="run-spinner"></span><span id="run-status-text">Starting…</span></div>
+    <div class="run-log" id="run-log-box"></div>
+  `);
+
+  // Disable close button during run (re-enable on done)
+  const closeBtn = document.querySelector('#modal .modal-box button');
+  if (closeBtn) closeBtn.disabled = true;
+
+  const logBox = document.getElementById('run-log-box');
+  const statusText = document.getElementById('run-status-text');
+  const spinner = document.getElementById('run-spinner');
+
+  function appendLog(text) {
+    logBox.textContent += text;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  try {
+    const resp = await fetch(`/api/cron/run/${encodeURIComponent(jobId)}`, { method: 'POST' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: resp.statusText }));
+      appendLog('Error: ' + (err.error || resp.statusText));
+      statusText.textContent = '❌ Failed to start';
+      spinner.style.display = 'none';
+      if (closeBtn) closeBtn.disabled = false;
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      // Parse SSE lines
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const msg = JSON.parse(line.slice(5).trim());
+          if (msg.type === 'log') appendLog(msg.text);
+          else if (msg.type === 'done') {
+            spinner.style.display = 'none';
+            if (msg.code === 0) {
+              statusText.innerHTML = '<span style="color:var(--ok)">✅ Completed successfully</span>';
+            } else {
+              statusText.innerHTML = `<span style="color:var(--err)">❌ Exited with code ${msg.code}</span>`;
+            }
+            if (closeBtn) closeBtn.disabled = false;
+            // Refresh cron table after run
+            setTimeout(loadCron, 1000);
+          } else if (msg.type === 'error') {
+            appendLog('Error: ' + msg.text);
+            spinner.style.display = 'none';
+            statusText.innerHTML = '<span style="color:var(--err)">❌ Error</span>';
+            if (closeBtn) closeBtn.disabled = false;
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    appendLog('Fetch error: ' + e.message);
+    spinner.style.display = 'none';
+    statusText.innerHTML = '<span style="color:var(--err)">❌ Connection error</span>';
+    if (closeBtn) closeBtn.disabled = false;
+  }
+}
+
+// Event delegation for ▶ Run button
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.btn-run');
+  if (btn && !btn.disabled) {
+    const jobId = btn.dataset.jobid;
+    const jobName = btn.dataset.jobname;
+    runJob(jobId, jobName);
+  }
+});
+
+// Event delegation for cron name click
+document.addEventListener('click', e => {
+  const cell = e.target.closest('.cron-name-cell');
+  if (cell) showCronPrompt(cell.dataset.job);
+});
+
+// Event delegation for ✏️ Edit button
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.btn-edit');
+  if (btn) openEditModal(JSON.parse(btn.dataset.editjob));
+});
+
+// Event delegation for 🗑 Delete button
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.btn-delete');
+  if (btn) deleteJob(btn.dataset.jobid, btn.dataset.jobname);
+});
+
+// Event delegation for ⏸ Pause / Resume button
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.btn-pause');
+  if (btn) togglePause(btn.dataset.jobid, btn.dataset.enabled === 'true');
+});
+
+// ── Edit Job Modal ─────────────────────────────────────────────
+function openEditModal(j) {
+  const html = `
+    <h3 style="margin:0 0 4px">✏️ Edit Job</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 4px">ID: ${escHtml(j.id)}</p>
+    <div class="edit-form">
+      <label>Name</label>
+      <input id="ef-name" value="${escAttr(j.name||'')}" placeholder="Job name">
+      <label>Schedule</label>
+      <input id="ef-schedule" value="${escAttr(j.schedule_display||j.schedule||'')}" placeholder="e.g. every day, 0 9 * * *">
+      <label>Prompt / Task</label>
+      <textarea id="ef-prompt">${escHtml(j.prompt||'')}</textarea>
+      <div class="row2">
+        <div>
+          <label>Deliver To</label>
+          <input id="ef-deliver" value="${escAttr(j.deliver||'')}" placeholder="origin / telegram:… / email:…">
+        </div>
+        <div>
+          <label>Repeat Count</label>
+          <input id="ef-repeat" type="number" value="${escAttr(j.repeat!=null?String(j.repeat):'')}" placeholder="blank = forever">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveEdit('${escAttr(j.id)}')">💾 Save Changes</button>
+      </div>
+    </div>`;
+  openModal(html);
+}
+
+async function saveEdit(jobId) {
+  const name     = document.getElementById('ef-name').value.trim();
+  const schedule = document.getElementById('ef-schedule').value.trim();
+  const prompt   = document.getElementById('ef-prompt').value.trim();
+  const deliver  = document.getElementById('ef-deliver').value.trim();
+  const repeat   = document.getElementById('ef-repeat').value.trim();
+
+  const saveBtn = document.querySelector('.btn-primary');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch(`/api/cron/edit/${encodeURIComponent(jobId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, schedule, prompt, deliver, repeat }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+    closeModal();
+    loadCron(); // refresh table
+  } catch (e) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Save Changes';
+    alert('Error: ' + e.message);
+  }
+}
+
+async function deleteJob(jobId, jobName) {
+  if (!confirm(`Delete job "${jobName}"?\n\nThis cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/cron/${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    loadCron();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function togglePause(jobId, isEnabled) {
+  const action = isEnabled ? 'pause' : 'resume';
+  try {
+    const res = await fetch(`/api/cron/${action}/${encodeURIComponent(jobId)}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `${action} failed`);
+    loadCron();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// ── KANBAN ────────────────────────────────────────────────────
+let kanbanData = null;
+
+async function loadKanban() {
+  try {
+    kanbanData = await fetch('/api/kanban').then(r => r.json());
+    renderKanban();
+  } catch (e) {
+    document.getElementById('kanban-board').innerHTML = `<p class="empty">Error: ${e.message}</p>`;
+  }
+}
+
+function renderKanban() {
+  if (!kanbanData) return;
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = kanbanData.columns.map(col => {
+    const cards = col.id === 'done'
+      ? [...col.cards].sort((a,b) => new Date(b.completedAt||0) - new Date(a.completedAt||0))
+      : col.cards;
+    return `
+    <div class="kb-col" id="col-${col.id}" data-col="${col.id}"
+         ondragover="colDragOver(event,'${col.id}')"
+         ondragleave="colDragLeave(event,'${col.id}')"
+         ondrop="colOrCardDrop(event,'${col.id}')">
+      <h3 draggable="true" ondragstart="dragCol(event,'${col.id}')"
+          style="cursor:grab">${col.title} <span style="font-size:11px;font-weight:400;color:var(--muted);cursor:default">(${col.cards.length})</span></h3>
+      ${col.cards.length && col.id === 'done' ? `<button class="btn-sm" style="margin-bottom:8px;font-size:11px" onclick="archiveAllDone('${col.id}')">📦 Archive all done (${col.cards.length})</button>` : ''}
+      <div class="kb-cards" id="cards-${col.id}">
+      ${cards.map(card => {
+        const isRunning = card.agentStatus === 'running';
+        const isDone = col.id === 'done';
+        const isDoing = col.id === 'doing';
+        const isTodo = col.id === 'todo';
+        const agentIcon = (card.agentType||'').includes('coding') ? '💻' : (card.agentType||'').includes('research') ? '🔍' : '🤖';
+        const agentLabel = card.agentType || 'hermes';
+        const notesText = card.notes || card.desc || '';
+
+        // Status badge for done/doing
+        const statusBadge = isDone
+          ? (card.agentStatus === 'error' || card.agentStatus === 'failed'
+              ? `<span class="kb-status-badge kb-status-failed">❌ Failed</span>`
+              : `<span class="kb-status-badge kb-status-done">✅ Done</span>`)
+          : isDoing
+            ? `<span class="kb-status-badge kb-status-running">⏳ In Progress</span>`
+            : '';
+
+        // Run button — show for any non-done column card that isn't actively running
+        const canRun = !isDone && !isRunning;
+        const runBtn = canRun
+          ? `<button class="btn-run-card" onclick="event.stopPropagation();runKanbanCard('${card.id}')" title="Run task with Hermes agent">▶ Run</button>`
+          : isRunning
+            ? `<button class="btn-run-card running" disabled>⏳ Running…</button>`
+            : '';
+
+        // Details expand/collapse
+        const detailsHtml = notesText.length > 120
+          ? `<div class="kb-card-details-wrap clamped" data-id="${card.id}">${escHtml(notesText)}</div>
+             <button class="kb-card-expand-btn" data-id="${card.id}" onclick="event.stopPropagation();toggleKbExpand('${card.id}')" title="Expand">▼</button>`
+          : notesText
+            ? `<div class="kb-card-desc">${escHtml(notesText.slice(0,160))}</div>`
+            : '';
+
+        return `
+        <div class="kb-card" draggable="true" id="card-${card.id}"
+             ondragstart="dragCard(event,'${card.id}','${col.id}')"
+             ondragover="cardDragOver(event,'${card.id}','${col.id}')"
+             onclick="if(!this._dragged)openCardDetail('${card.id}')"
+             ondragend="this._dragged=false"
+             style="cursor:pointer">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+            <div class="kb-card-title" style="flex:1">${escHtml(card.title)}</div>
+            <span class="pri-badge pri-${card.priority||'none'}" title="Click to change priority"
+                  onclick="event.stopPropagation();cyclePriority('${card.id}',this)">${priLabel(card.priority||'none')}</span>
+          </div>
+          ${detailsHtml}
+          ${isDone && card.completedAt ? `<div class="kb-completed-at">✔ Completed ${new Date(card.completedAt).toLocaleString('en-NZ',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>` : ''}
+          <div class="kb-card-meta">
+            <span style="font-size:11px;color:var(--muted)">${agentIcon} ${escHtml(agentLabel)}</span>
+            ${statusBadge}
+            ${runBtn}
+            <button class="btn-sm btn-logs-sm" onclick="event.stopPropagation();showKbLogs('${card.id}','${escHtml(card.title)}')" title="View logs">📋 Logs</button>
+            <button class="btn-sm" onclick="event.stopPropagation();openCardDetail('${card.id}')" title="Edit">✏️</button>
+            <button class="btn-sm" onclick="event.stopPropagation();archiveCard('${card.id}')" title="Archive">📦</button>
+            <button class="btn-sm" onclick="event.stopPropagation();deleteCard('${card.id}','${col.id}')">🗑</button>
+          </div>
+        </div>`;
+      }).join('')}
+      </div>
+      ${col.id === 'todo' ? `
+      <div style="margin-top:8px;display:flex;gap:4px;align-items:center">
+        <input id="new-card-${col.id}" type="text" placeholder="+ Add card…" style="flex:1;padding:6px 8px;border:1px dashed var(--border);border-radius:6px;font-size:12px;background:transparent;outline:none"
+               onkeydown="if(event.key==='Enter')addCard('${col.id}')">
+        <select id="new-card-pri-${col.id}" style="padding:5px 4px;border:1px dashed var(--border);border-radius:6px;font-size:11px;background:var(--bg2);color:var(--text);cursor:pointer;outline:none">
+          <option value="none">–</option>
+          <option value="low">🟢 Low</option>
+          <option value="medium">🟡 Med</option>
+          <option value="high">🔴 High</option>
+        </select>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+  // Show expand buttons where needed
+  requestAnimationFrame(() => measureKbClamps());
+}
+
+let dragCardId = null, dragFromCol = null;
+let dragColId = null; // column being dragged
+
+// ── Column drag ───────────────────────────────────────────────
+function dragCol(e, colId) {
+  dragColId = colId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', colId);
+  setTimeout(() => document.getElementById('col-' + colId)?.classList.add('col-dragging'), 0);
+}
+function colDragOver(e, colId) {
+  e.preventDefault();
+  if (dragColId && dragColId !== colId) {
+    // column reorder hover
+    document.querySelectorAll('.kb-col').forEach(c => c.classList.remove('col-drop-target'));
+    document.getElementById('col-' + colId)?.classList.add('col-drop-target');
+  } else if (!dragColId && dragCardId) {
+    // card-over-column
+    document.getElementById('col-' + colId)?.classList.add('drag-over');
+  }
+}
+function colDragLeave(e, colId) {
+  document.getElementById('col-' + colId)?.classList.remove('drag-over', 'col-drop-target');
+}
+// colOrCardDrop defined below (enhanced version with intra-column reorder)
+
+function dragCard(e, cardId, colId) {
+  dragColId = null; // ensure column drag is cleared
+  dragCardId = cardId; dragFromCol = colId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation(); // don't bubble to column dragstart
+  const el = document.getElementById('card-' + cardId);
+  if (el) el._dragged = true;
+  setTimeout(() => el?.classList.add('dragging'), 0);
+}
+
+// ── Intra-column card reorder (drag over sibling card) ────────
+function cardDragOver(e, cardId, colId) {
+  if (!dragCardId || dragFromCol !== colId || dragCardId === cardId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const draggingEl = document.getElementById('card-' + dragCardId);
+  const targetEl = document.getElementById('card-' + cardId);
+  if (!draggingEl || !targetEl) return;
+  const cardsEl = document.getElementById('cards-' + colId);
+  const cards = [...cardsEl.querySelectorAll('.kb-card')];
+  const dragIdx = cards.indexOf(draggingEl);
+  const targetIdx = cards.indexOf(targetEl);
+  if (dragIdx > targetIdx) cardsEl.insertBefore(draggingEl, targetEl);
+  else cardsEl.insertBefore(draggingEl, targetEl.nextSibling);
+}
+
+// After drop within same column, persist order
+async function colOrCardDrop(e, toColId) {
+  e.preventDefault();
+  document.querySelectorAll('.kb-col').forEach(c =>
+    c.classList.remove('drag-over', 'col-drop-target', 'col-dragging'));
+  if (dragColId) {
+    const fromId = dragColId;
+    dragColId = null;
+    if (fromId === toColId) return;
+    const ids = kanbanData.columns.map(c => c.id);
+    const fromIdx = ids.indexOf(fromId);
+    const toIdx   = ids.indexOf(toColId);
+    ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, fromId);
+    await fetch('/api/kanban/columns/reorder', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ orderedIds: ids })
+    });
+    loadKanban();
+  } else if (dragCardId) {
+    const fromCol = dragFromCol;
+    const cId = dragCardId;
+    dragCardId = null; dragFromCol = null;
+    if (fromCol === toColId) {
+      // Intra-column reorder — persist current DOM order
+      const cardsEl = document.getElementById('cards-' + toColId);
+      if (cardsEl) {
+        const cardIds = [...cardsEl.querySelectorAll('.kb-card')].map(el => el.id.replace('card-',''));
+        await fetch('/api/kanban/reorder', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ columnId: toColId, cardIds })
+        });
+      }
+      loadKanban();
+    } else {
+      await fetch('/api/kanban/move', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ fromColumn: fromCol, toColumn: toColId, cardId: cId })
+      });
+      loadKanban();
+    }
+  }
+}
+
+// ── Run card ──────────────────────────────────────────────────
+const _pollingCards = new Set();
+async function runKanbanCard(cardId) {
+  try {
+    const r = await fetch(`/api/kanban/cards/${cardId}/run`, { method: 'POST' }).then(r => r.json());
+    if (r.ok) {
+      showToast('▶ Agent started!');
+      setTimeout(loadKanban, 800);
+      pollKanbanCard(cardId);
+    } else {
+      showToast('❌ ' + (r.error || 'Failed to start'));
+    }
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+function pollKanbanCard(cardId) {
+  if (_pollingCards.has(cardId)) return;
+  _pollingCards.add(cardId);
+  const iv = setInterval(async () => {
+    try {
+      const data = await fetch('/api/kanban').then(r => r.json());
+      let card = null;
+      for (const col of data.columns) { card = col.cards.find(c => c.id === cardId); if (card) break; }
+      if (!card || card.agentStatus !== 'running') {
+        clearInterval(iv);
+        _pollingCards.delete(cardId);
+        loadKanban();
+        if (card?.agentStatus === 'done') showToast('✅ Task complete!', 'info');
+        else if (card?.agentStatus === 'failed' || card?.agentStatus === 'error') showToast('❌ Failed: ' + (card?.title||'').slice(0,40));
+      }
+    } catch { clearInterval(iv); _pollingCards.delete(cardId); }
+  }, 3000);
+}
+
+// ── Card logs modal ───────────────────────────────────────────
+async function showKbLogs(cardId, title) {
+  const modal = document.getElementById('logs-modal');
+  const bodyEl = document.getElementById('logs-modal-body');
+  const titleEl = document.getElementById('logs-modal-title');
+  titleEl.textContent = '📋 Logs — ' + title;
+  bodyEl.textContent = 'Loading…';
+  modal.classList.add('open');
+  try {
+    const lines = await fetch(`/api/kanban/cards/${cardId}/logs`).then(r => r.json());
+    bodyEl.textContent = Array.isArray(lines) && lines.length ? lines.join('\n') : 'No logs yet. Run the agent first.';
+  } catch(e) { bodyEl.textContent = 'Error: ' + e.message; }
+}
+function closeKbLogsModal() {
+  document.getElementById('logs-modal').classList.remove('open');
+}
+
+// ── Expand/collapse card details ──────────────────────────────
+function toggleKbExpand(cardId) {
+  const wrap = document.querySelector(`.kb-card-details-wrap[data-id="${cardId}"]`);
+  const btn = document.querySelector(`.kb-card-expand-btn[data-id="${cardId}"]`);
+  if (!wrap) return;
+  const expanded = wrap.classList.toggle('clamped') === false;
+  if (btn) { btn.textContent = wrap.classList.contains('clamped') ? '▼' : '▲'; }
+}
+function measureKbClamps() {
+  document.querySelectorAll('.kb-card-details-wrap').forEach(wrap => {
+    const cardId = wrap.dataset.id;
+    const btn = document.querySelector(`.kb-card-expand-btn[data-id="${cardId}"]`);
+    if (!btn) return;
+    const isClamped = wrap.classList.contains('clamped');
+    wrap.classList.remove('clamped');
+    const full = wrap.scrollHeight;
+    wrap.classList.add('clamped');
+    const clamped = wrap.clientHeight;
+    if (full - clamped > 2) { btn.style.display = 'block'; }
+    else { btn.style.display = 'none'; wrap.classList.remove('clamped'); }
+    if (!isClamped) { wrap.classList.remove('clamped'); }
+  });
+}
+function priLabel(p) {
+  return { none:'–', low:'Low', medium:'Med', high:'High' }[p] || '–';
+}
+const PRI_CYCLE = ['none','low','medium','high'];
+async function cyclePriority(cardId, el) {
+  const cur = PRI_CYCLE.indexOf([...el.classList].find(c=>c.startsWith('pri-'))?.replace('pri-','') || 'none');
+  const next = PRI_CYCLE[(cur + 1) % PRI_CYCLE.length];
+  await fetch(`/api/kanban/cards/${cardId}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ priority: next })
+  });
+  // optimistic update — no full re-render
+  el.className = `pri-badge pri-${next}`;
+  el.textContent = priLabel(next);
+  // also update local data
+  kanbanData.columns.forEach(col => {
+    const card = col.cards.find(c => c.id === cardId);
+    if (card) card.priority = next;
+  });
+}
+async function addCard(colId) {
+  const inp = document.getElementById('new-card-' + colId);
+  const pri = document.getElementById('new-card-pri-' + colId);
+  const title = inp.value.trim();
+  if (!title) return;
+  await fetch('/api/kanban/cards', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ columnId: colId, title, priority: pri?.value || 'none' })
+  });
+  inp.value = '';
+  if (pri) pri.value = 'none';
+  loadKanban();
+}
+async function deleteCard(cardId, colId) {
+  if (!confirm('Delete this card?')) return;
+  await fetch(`/api/kanban/cards/${cardId}`, { method: 'DELETE' });
+  loadKanban();
+}
+
+// ── Archive ────────────────────────────────────────────────────
+async function archiveCard(cardId) {
+  await fetch(`/api/kanban/archive/${cardId}`, { method: 'POST' });
+  loadKanban();
+}
+async function archiveAllDone(colId) {
+  if (!confirm(`Archive all cards in this column?`)) return;
+  await fetch('/api/kanban/archive/all-done', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ colId }) });
+  loadKanban();
+}
+async function openArchive() {
+  const cards = await fetch('/api/kanban/archive').then(r => r.json());
+  const el = document.getElementById('archive-list');
+  if (!cards.length) {
+    el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:32px 0">No archived cards</p>';
+  } else {
+    el.innerHTML = cards.map(c => `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">${escHtml(c.title)}</div>
+          ${c.notes ? `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${escHtml(c.notes.slice(0,100))}${c.notes.length>100?'…':''}</div>` : ''}
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="pri-badge pri-${c.priority||'none'}">${priLabel(c.priority||'none')}</span>
+            <span style="font-size:10px;color:var(--muted)">archived ${new Date(c.archivedAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn-sm" onclick="restoreCard('${c.id}')" title="Restore to board">↩ Restore</button>
+          <button class="btn-sm" onclick="deleteArchived('${c.id}')" title="Delete permanently">🗑</button>
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('archive-modal').style.display = 'flex';
+}
+async function restoreCard(cardId) {
+  await fetch(`/api/kanban/archive/${cardId}/restore`, { method: 'POST' });
+  loadKanban();
+  openArchive();
+}
+async function deleteArchived(cardId) {
+  if (!confirm('Permanently delete this archived card?')) return;
+  await fetch(`/api/kanban/archive/${cardId}`, { method: 'DELETE' });
+  openArchive();
+}
+async function clearArchive() {
+  if (!confirm('Permanently delete all archived cards?')) return;
+  await fetch('/api/kanban/archive', { method: 'DELETE' });
+  openArchive();
+}
+function openAddCard(colId) {
+  const modal = document.getElementById('add-card-modal');
+  if (!modal) return;
+  // Populate column select dynamically from live kanban data
+  const colSel = document.getElementById('acm-col');
+  if (colSel && kanbanData?.columns?.length) {
+    colSel.innerHTML = kanbanData.columns.map(c =>
+      `<option value="${c.id}">${escHtml(c.title)}</option>`
+    ).join('');
+  }
+  if (colSel && colId) colSel.value = colId;
+  modal.style.display = 'flex';
+  document.getElementById('acm-title').value = '';
+  document.getElementById('acm-desc').value = '';
+  document.getElementById('acm-pri').value = 'none';
+  setTimeout(() => document.getElementById('acm-title').focus(), 50);
+}
+function closeAddCardModal() {
+  const modal = document.getElementById('add-card-modal');
+  if (modal) modal.style.display = 'none';
+}
+async function submitAddCard() {
+  const titleEl = document.getElementById('acm-title');
+  const title = titleEl.value.trim();
+  if (!title) { titleEl.focus(); titleEl.style.outline = '2px solid #f87171'; return; }
+  titleEl.style.outline = '';
+  const colId = document.getElementById('acm-col').value;
+  const priority = document.getElementById('acm-pri').value;
+  const desc = document.getElementById('acm-desc').value.trim();
+  const btn = document.getElementById('acm-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+  try {
+    const res = await fetch('/api/kanban/cards', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ columnId: colId, title, desc: desc || '', priority })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Failed to add card: ${err.error || res.statusText}`, 'error');
+      return;
+    }
+    closeAddCardModal();
+    loadKanban();
+  } catch (e) {
+    showToast(`❌ Network error: ${e.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Add Card'; }
+  }
+}
+
+// ── SKILLS ────────────────────────────────────────────────────
+let _allSkills = [];
+
+async function loadSkills() {
+  const el = document.getElementById('skills-content');
+  const searchEl = document.getElementById('skills-search');
+  try {
+    const skills = await fetch('/api/skills').then(r => r.json());
+    _allSkills = skills;
+    if (searchEl) searchEl.value = '';
+    const statusEl = document.getElementById('skills-search-status');
+    if (statusEl) statusEl.style.display = 'none';
+    renderSkills(skills);
+  } catch (e) {
+    el.innerHTML = `<p class="empty">Error: ${e.message}</p>`;
+  }
+}
+
+async function toggleSkill(name, enabled) {
+  try {
+    const r = await fetch(`/api/skills/${encodeURIComponent(name)}/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    // Update local state
+    const idx = _allSkills.findIndex(s => s.name === name);
+    if (idx !== -1) _allSkills[idx].enabled = enabled;
+    // Update card appearance without full re-render
+    const card = document.querySelector(`.skill-card[data-skill="${name.replace(/"/g, '\\"')}"]`);
+    if (card) {
+      card.classList.toggle('disabled', !enabled);
+      const toggle = card.querySelector('.skill-toggle input');
+      if (toggle) toggle.disabled = false;
+    }
+  } catch (e) {
+    alert('Failed to toggle skill: ' + e.message);
+    // Revert toggle
+    const card = document.querySelector(`.skill-card[data-skill="${name.replace(/"/g, '\\"')}"]`);
+    if (card) {
+      const toggle = card.querySelector('.skill-toggle input');
+      if (toggle) { toggle.checked = !enabled; toggle.disabled = false; }
+    }
+  }
+}
+
+function renderSkills(skills) {
+  const el = document.getElementById('skills-content');
+  if (!skills.length) {
+    el.innerHTML = '<p class="empty">No skills found in ~/.hermes/skills/</p>';
+    return;
+  }
+  // Group by category
+  const groups = {};
+  for (const s of skills) {
+    const cat = s.category || 'General';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(s);
+  }
+  el.innerHTML = Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0])).map(([cat, items]) => `
+    <div style="margin-bottom:20px">
+      <h3 style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${cat}</h3>
+      <div class="skill-grid">
+        ${items.map(s => `
+          <div class="skill-card${s.enabled === false ? ' disabled' : ''}" data-skill="${escHtml(s.name)}" onclick="openSkillDetail('${escAttr(s.name)}')">
+            <div class="skill-card-header">
+              <div class="skill-card-name">${escHtml(s.name)}</div>
+              <label class="skill-toggle" title="${s.enabled !== false ? 'Disable' : 'Enable'} skill" onclick="event.stopPropagation()">
+                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} onchange="this.disabled=true;toggleSkill('${escAttr(s.name)}',this.checked)">
+                <span class="skill-toggle-slider"></span>
+              </label>
+            </div>
+            <div class="skill-card-desc">${escHtml(s.description || '—')}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterSkills(query) {
+  const statusEl = document.getElementById('skills-search-status');
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    renderSkills(_allSkills);
+    if (statusEl) statusEl.style.display = 'none';
+    return;
+  }
+  const filtered = _allSkills.filter(s =>
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.description || '').toLowerCase().includes(q) ||
+    (s.category || '').toLowerCase().includes(q)
+  );
+  renderSkills(filtered);
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.textContent = filtered.length
+      ? `Showing ${filtered.length} of ${_allSkills.length} skills matching "${query}"`
+      : `No skills match "${query}"`;
+  }
+}
+
+// ── SKILLS HUB ────────────────────────────────────────────────
+let _hubPage = 1;
+let _hubTotalPages = 1;
+
+function openSkillsHub() {
+  const modal = document.getElementById('skills-hub-modal');
+  modal.style.display = 'flex';
+  document.getElementById('hub-search-input').focus();
+}
+
+function closeSkillsHub() {
+  document.getElementById('skills-hub-modal').style.display = 'none';
+}
+
+// Close on backdrop click
+document.getElementById('skills-hub-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeSkillsHub();
+});
+
+async function hubSearch() {
+  const q = document.getElementById('hub-search-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('hub-results');
+  const pag = document.getElementById('hub-pagination');
+  el.innerHTML = '<p style="color:#64748b;font-size:13px;text-align:center;margin-top:40px">🔍 Searching…</p>';
+  pag.style.display = 'none';
+  try {
+    const data = await fetch(`/api/skills/hub/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    renderHubResults(data.results, false);
+  } catch (e) {
+    el.innerHTML = `<p style="color:#ef4444;font-size:13px">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+async function hubBrowse(page) {
+  _hubPage = Math.max(1, page);
+  const el = document.getElementById('hub-results');
+  const pag = document.getElementById('hub-pagination');
+  el.innerHTML = '<p style="color:#64748b;font-size:13px;text-align:center;margin-top:40px">⏳ Loading…</p>';
+  pag.style.display = 'none';
+  try {
+    const data = await fetch(`/api/skills/hub/browse?page=${_hubPage}`).then(r => r.json());
+    _hubTotalPages = data.totalPages || 1;
+    renderHubResults(data.results, true);
+  } catch (e) {
+    el.innerHTML = `<p style="color:#ef4444;font-size:13px">Error: ${escHtml(e.message)}</p>`;
+  }
+}
+
+function renderHubResults(results, paginate) {
+  const el = document.getElementById('hub-results');
+  const pag = document.getElementById('hub-pagination');
+  const installedNames = new Set(_allSkills.map(s => s.name));
+
+  if (!results.length) {
+    el.innerHTML = '<p style="color:#64748b;font-size:13px;text-align:center;margin-top:40px">No results found.</p>';
+    pag.style.display = 'none';
+    return;
+  }
+
+  el.innerHTML = results.map(r => {
+    const installed = installedNames.has(r.name);
+    const trustColor = r.trust === 'official' ? '#22c55e' : r.trust === 'builtin' ? '#38bdf8' : '#f59e0b';
+    return `
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid #334155;border-radius:8px;margin-bottom:8px;background:#0f172a">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:13px;font-weight:600;color:#f1f5f9">${escHtml(r.name)}</span>
+            <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:#1e293b;color:${trustColor};border:1px solid ${trustColor}40">${escHtml(r.source)}</span>
+            ${installed ? '<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:#052e16;color:#22c55e;border:1px solid #166534">✓ installed</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px;line-height:1.5">${escHtml(r.description || '—')}</div>
+          <div style="font-size:10px;color:#475569;margin-top:4px;font-family:monospace">${escHtml(r.identifier)}</div>
+        </div>
+        ${installed
+          ? '<button style="flex-shrink:0;padding:5px 14px;background:#052e16;border:1px solid #166534;border-radius:6px;color:#22c55e;font-size:12px;cursor:default">✓ Installed</button>'
+          : `<button id="hub-btn-${escAttr(r.identifier)}" onclick="installHubSkill('${escAttr(r.identifier)}','${escAttr(r.name)}')" style="flex-shrink:0;padding:5px 14px;background:#7c3aed;border:1px solid #7c3aed;border-radius:6px;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap">Install</button>`
+        }
+      </div>
+    `;
+  }).join('');
+
+  if (paginate) {
+    pag.style.display = 'flex';
+    document.getElementById('hub-page-label').textContent = `Page ${_hubPage} of ${_hubTotalPages}`;
+    document.getElementById('hub-prev').disabled = _hubPage <= 1;
+    document.getElementById('hub-next').disabled = _hubPage >= _hubTotalPages;
+  } else {
+    pag.style.display = 'none';
+  }
+}
+
+async function installHubSkill(identifier, name) {
+  const btn = document.getElementById(`hub-btn-${identifier.replace(/[^a-zA-Z0-9]/g, '\\$&')}`);
+  const safeId = CSS.escape(identifier);
+  const btnEl = document.querySelector(`[id="hub-btn-${safeId}"]`) ||
+                document.getElementById('hub-btn-' + identifier);
+  if (btnEl) { btnEl.textContent = '⏳ Installing…'; btnEl.disabled = true; }
+  try {
+    const r = await fetch('/api/skills/hub/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    if (btnEl) {
+      btnEl.textContent = '✓ Installed';
+      btnEl.style.background = '#052e16';
+      btnEl.style.borderColor = '#166534';
+      btnEl.style.color = '#22c55e';
+    }
+    // Refresh local skills list silently
+    const skills = await fetch('/api/skills').then(r => r.json());
+    _allSkills = skills;
+  } catch (e) {
+    if (btnEl) { btnEl.textContent = 'Install'; btnEl.disabled = false; }
+    alert('Install failed: ' + e.message);
+  }
+}
+
+// ── SKILL DETAIL MODAL ────────────────────────────────────────
+/* ── lightweight markdown → html renderer ── */
+function renderMarkdown(md) {
+  // strip YAML front-matter
+  let text = md.replace(/^---[\s\S]*?---\n?/, '');
+  // escape HTML in non-code sections, process block by block
+  const lines = text.split('\n');
+  let html = '';
+  let inPre = false, inUl = false, inOl = false;
+  const closeList = () => {
+    if (inUl) { html += '</ul>'; inUl = false; }
+    if (inOl) { html += '</ol>'; inOl = false; }
+  };
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline = s => s
+    .replace(/`([^`]+)`/g, (_,c)=>`<code>${esc(c)}</code>`)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '') // strip images
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    // fenced code blocks
+    if (raw.startsWith('```')) {
+      if (!inPre) { closeList(); const lang = raw.slice(3).trim(); html += `<pre><code class="lang-${esc(lang)}">`;  inPre = true; }
+      else { html += '</code></pre>'; inPre = false; }
+      continue;
+    }
+    if (inPre) { html += esc(raw) + '\n'; continue; }
+    // headings
+    if (/^#{1,4}\s/.test(raw)) {
+      closeList();
+      const m = raw.match(/^(#{1,4})\s+(.*)/);
+      const lvl = m[1].length;
+      html += `<h${lvl}>${inline(esc(m[2]))}</h${lvl}>`;
+      continue;
+    }
+    // hr
+    if (/^---+$/.test(raw.trim()) || /^\*\*\*+$/.test(raw.trim())) {
+      closeList(); html += '<hr>'; continue;
+    }
+    // blockquote
+    if (raw.startsWith('> ')) {
+      closeList(); html += `<blockquote>${inline(esc(raw.slice(2)))}</blockquote>`; continue;
+    }
+    // unordered list
+    if (/^[-*+]\s/.test(raw)) {
+      if (!inUl) { if (inOl){html+='</ol>';inOl=false;} html += '<ul>'; inUl = true; }
+      html += `<li>${inline(esc(raw.replace(/^[-*+]\s/,'')))}</li>`; continue;
+    }
+    // ordered list
+    if (/^\d+\.\s/.test(raw)) {
+      if (!inOl) { if (inUl){html+='</ul>';inUl=false;} html += '<ol>'; inOl = true; }
+      html += `<li>${inline(esc(raw.replace(/^\d+\.\s/,'')))}</li>`; continue;
+    }
+    // blank line
+    if (raw.trim() === '') { closeList(); html += ''; continue; }
+    // paragraph
+    closeList();
+    html += `<p>${inline(esc(raw))}</p>`;
+  }
+  closeList();
+  if (inPre) html += '</code></pre>';
+  return html;
+}
+
+let _skillDetailRaw = '';
+
+async function openSkillDetail(skillName) {
+  const skill = _allSkills.find(s => s.name === skillName);
+  if (!skill) return;
+
+  // populate header
+  document.getElementById('skill-modal-title').textContent = skillName;
+  const badge = document.getElementById('skill-modal-badge');
+  const isEnabled = skill.enabled !== false;
+  badge.textContent = isEnabled ? '● Enabled' : '○ Disabled';
+  badge.className = 'skill-modal-badge ' + (isEnabled ? 'enabled' : 'disabled');
+
+  // populate meta bar
+  document.getElementById('skill-modal-cat').textContent = skill.category || 'uncategorised';
+  document.getElementById('skill-modal-meta-desc').textContent = skill.description || '';
+  const pathParts = (skill.path || '').split('/');
+  document.getElementById('skill-modal-path').textContent = pathParts.slice(-2).join('/');
+
+  // show modal with loading state
+  document.getElementById('skill-modal-body-inner').innerHTML = '<div class="skill-modal-loading">Loading…</div>';
+  _skillDetailRaw = '';
+  document.getElementById('skill-detail-modal').classList.add('open');
+
+  try {
+    const r = await fetch(`/api/skills/content?path=${encodeURIComponent(skill.path)}`);
+    const data = await r.json();
+    _skillDetailRaw = data.content || '';
+    document.getElementById('skill-modal-body-inner').innerHTML =
+      `<div class="skill-modal-md">${renderMarkdown(_skillDetailRaw)}</div>`;
+  } catch (e) {
+    document.getElementById('skill-modal-body-inner').innerHTML =
+      `<div class="skill-modal-loading" style="color:#f87171">Error: ${e.message}</div>`;
+  }
+}
+
+function closeSkillDetail() {
+  document.getElementById('skill-detail-modal').classList.remove('open');
+}
+
+function copySkillContent() {
+  if (!_skillDetailRaw) return;
+  navigator.clipboard.writeText(_skillDetailRaw).then(() => {
+    const btn = document.getElementById('skill-modal-copy-btn');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = '⎘ Copy'; }, 2000);
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('skill-detail-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('skill-detail-modal')) closeSkillDetail();
+  });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const m = document.getElementById('skill-detail-modal');
+    if (m && m.classList.contains('open')) closeSkillDetail();
+    const acm = document.getElementById('add-card-modal');
+    if (acm && acm.style.display === 'flex') closeAddCardModal();
+  }
+});
+
+// ── MEMORY ────────────────────────────────────────────────────
+let _memoryData = {};
+
+async function loadMemory() {
+  const el = document.getElementById('memory-content');
+  try {
+    const data = await fetch('/api/memories').then(r => r.json());
+    _memoryData = data;
+    if (!Object.keys(data).length) {
+      el.innerHTML = '<p class="empty">No memory files found</p>';
+      return;
+    }
+    el.innerHTML = Object.entries(data).map(([file, content]) => `
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <h3 style="font-size:14px;font-weight:700;color:var(--accent);margin:0">${file}</h3>
+          <button class="btn-edit btn-sm" onclick="openMemoryEdit('${file}')" title="Edit ${file}">✏️ Edit</button>
+        </div>
+        <div class="memory-block">${escHtml(content)}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('loadMemory error:', e.stack || e.message);
+    el.innerHTML = `<p class="empty">Error: ${e.message}</p>`;
+  }
+}
+
+function openMemoryEdit(file) {
+  const content = _memoryData[file] || '';
+  const modalHtml = `
+    <h3 style="margin-bottom:12px">✏️ Edit ${file}</h3>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:10px">📁 ~/.hermes/memories/${file}</p>
+    <textarea id="memory-edit-area" style="width:100%;min-height:400px;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'SF Mono',Monaco,Menlo,monospace;background:#1e293b;color:#f1f5f9;resize:vertical;outline:none;line-height:1.6;box-sizing:border-box">${escHtml(content)}</textarea>
+  `;
+  openModal(modalHtml, '💾 Save', async () => {
+    const newContent = document.getElementById('memory-edit-area').value;
+    const btn = document.getElementById('modal-action-btn');
+    btn.textContent = 'Saving…'; btn.disabled = true;
+    try {
+      const res = await fetch(`/api/memories/${encodeURIComponent(file)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newContent }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      closeModal();
+      toast(`✅ ${file} saved`);
+      loadMemory();
+    } catch (e) {
+      alert('Save failed: ' + e.message);
+    } finally {
+      btn.textContent = '💾 Save'; btn.disabled = false;
+    }
+  });
+}
+
+// ── CONFIG ────────────────────────────────────────────────────
+// cached raw config for the editor
+let _configRaw = '';
+
+async function loadConfig() {
+  const el = document.getElementById('config-content');
+  try {
+    const data = await fetch('/api/config').then(r => r.json());
+    _configRaw = data.raw || '';
+    if (!_configRaw) {
+      el.innerHTML = '<p class="empty">Config file not found at ~/.hermes/config.yaml</p>';
+      return;
+    }
+    el.innerHTML = `
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">📁 ~/.hermes/config.yaml &nbsp;·&nbsp; <span style="color:#fbbf24">read-only view — click ✏️ Edit to modify</span></p>
+      <div class="config-viewer">${escHtml(_configRaw)}</div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<p class="empty">Error: ${e.message}</p>`;
+  }
+}
+
+// ── Config diff helpers ───────────────────────────────────────
+function cfgShowTab(tab) {
+  const editBtn  = document.getElementById('cfg-tab-edit');
+  const diffBtn  = document.getElementById('cfg-tab-diff');
+  const editPane = document.getElementById('cfg-pane-edit');
+  const diffPane = document.getElementById('cfg-pane-diff');
+  const prevBtn  = document.getElementById('cfg-preview-btn');
+  if (tab === 'diff') {
+    cfgRenderDiff();
+    editPane.style.display = 'none';
+    diffPane.style.display = 'flex';
+    diffBtn.style.background  = '#0f172a'; diffBtn.style.color = '#a5f3fc'; diffBtn.style.fontWeight = '600';
+    editBtn.style.background  = '#1e293b'; editBtn.style.color = '#64748b'; editBtn.style.fontWeight = 'normal';
+    prevBtn.style.display = 'none';
+  } else {
+    diffPane.style.display = 'none';
+    editPane.style.display = 'flex';
+    editBtn.style.background  = '#0f172a'; editBtn.style.color = '#a5f3fc'; editBtn.style.fontWeight = '600';
+    diffBtn.style.background  = '#1e293b'; diffBtn.style.color = '#64748b'; diffBtn.style.fontWeight = 'normal';
+    prevBtn.style.display = '';
+    if (typeof window._cmGetValue === 'function') window._cmGetValue() && window._cmView && window._cmView.focus();
+  }
+}
+
+function cfgLCS(a, b) {
+  // standard LCS table for line arrays
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => new Uint16Array(n+1));
+  for (let i = m-1; i >= 0; i--)
+    for (let j = n-1; j >= 0; j--)
+      dp[i][j] = a[i] === b[j] ? 1 + dp[i+1][j+1] : Math.max(dp[i+1][j], dp[i][j+1]);
+  // traceback
+  const ops = []; let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (a[i] === b[j])        { ops.push([' ', a[i]]); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) { ops.push(['-', a[i]]); i++; }
+    else                      { ops.push(['+', b[j]]); j++; }
+  }
+  while (i < m) { ops.push(['-', a[i++]]); }
+  while (j < n) { ops.push(['+', b[j++]]); }
+  return ops;
+}
+
+function cfgRenderDiff() {
+  const newVal  = typeof window._cmGetValue === 'function' ? window._cmGetValue() : '';
+  const view    = document.getElementById('cfg-diff-view');
+  const stats   = document.getElementById('cfg-diff-stats');
+  const oldLines = _configRaw.split('\n');
+  const newLines = newVal.split('\n');
+  const ops = cfgLCS(oldLines, newLines);
+
+  let added = 0, removed = 0;
+  // collapse long unchanged runs (context=3)
+  const CONTEXT = 3;
+  // mark which ops to show
+  const show = new Array(ops.length).fill(false);
+  ops.forEach((op, i) => {
+    if (op[0] !== ' ') { added += op[0]==='+' ? 1 : 0; removed += op[0]==='-' ? 1 : 0;
+      for (let k = Math.max(0,i-CONTEXT); k <= Math.min(ops.length-1,i+CONTEXT); k++) show[k]=true; }
+  });
+
+  if (added === 0 && removed === 0) {
+    view.innerHTML = '<span style="color:#64748b">  No changes — file is identical to saved version.</span>';
+    stats.innerHTML = '<span style="color:#64748b">No changes</span>';
+    return;
+  }
+  stats.innerHTML = `<span style="color:#86efac">+${added} added</span> &nbsp; <span style="color:#f87171">-${removed} removed</span>`;
+
+  let html = '', prevShown = true, lineOld = 1, lineNew = 1;
+  ops.forEach((op, i) => {
+    const [type, text] = op;
+    const esc = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (!show[i]) {
+      if (prevShown) html += `<span style="color:#334155;display:block">  ···</span>`;
+      prevShown = false;
+      if (type !== '+') lineOld++;
+      if (type !== '-') lineNew++;
+      return;
+    }
+    prevShown = true;
+    if (type === '-') {
+      html += `<span style="background:#3b0f0f;color:#f87171;display:block"><span style="color:#6b2020;user-select:none;margin-right:6px">${String(lineOld).padStart(4,' ')}    </span>- ${esc}</span>`;
+      lineOld++;
+    } else if (type === '+') {
+      html += `<span style="background:#0b2e1a;color:#86efac;display:block"><span style="color:#16532a;user-select:none;margin-right:6px">     ${String(lineNew).padStart(4,' ')}</span>+ ${esc}</span>`;
+      lineNew++;
+    } else {
+      html += `<span style="color:#475569;display:block"><span style="user-select:none;margin-right:6px;color:#334155">${String(lineOld).padStart(4,' ')} ${String(lineNew).padStart(4,' ')}</span>  ${esc}</span>`;
+      lineOld++; lineNew++;
+    }
+  });
+  view.innerHTML = html;
+}
+
+function openConfigEdit() {
+  const modal = document.getElementById('config-edit-modal');
+  cfgShowTab('edit');   // always start on edit tab
+  modal.style.display = 'flex';
+
+  // Init CodeMirror — wait a tick so the modal is visible first (CM needs dimensions)
+  requestAnimationFrame(() => {
+    if (typeof window._cmInit === 'function') {
+      window._cmInit(_configRaw);
+      // linter runs automatically via the CM extension after init
+    } else {
+      // CM not loaded yet (module still loading) — retry after a short delay
+      setTimeout(() => window._cmInit && window._cmInit(_configRaw), 300);
+    }
+  });
+}
+
+async function restoreConfigFromBackup() {
+  const btn = document.getElementById('cfg-restore-btn');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Loading…';
+  try {
+    const res = await fetch('/api/config/backup');
+    const data = await res.json();
+    if (!res.ok) { showToast('⚠️ ' + (data.error || 'No backup found'), 'warn'); return; }
+    const mtime = data.mtime ? new Date(data.mtime).toLocaleString() : 'unknown';
+    if (!confirm(`Load backup from ${mtime} into the editor?\n\nThis will replace your current edits (unsaved changes will be lost).`)) return;
+    window._cmInit(data.raw);          // replace editor content
+    setTimeout(() => window._cmForceLint && window._cmForceLint(), 350); // re-run linter on new content
+    cfgShowTab('edit');                // switch to edit tab
+    showToast(`↩ Backup from ${mtime} loaded — review and 💾 Save to apply`, 'info');
+  } catch (e) {
+    showToast('Error loading backup: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function closeConfigEdit() {
+  document.getElementById('config-edit-modal').style.display = 'none';
+  if (typeof window._cmDestroy === 'function') window._cmDestroy();
+}
+
+// close on backdrop click
+document.getElementById('config-edit-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('config-edit-modal')) closeConfigEdit();
+});
+
+async function saveConfig() {
+  // Block save if YAML is invalid
+  const lintBar = document.getElementById('cm-lint-status');
+  if (lintBar && lintBar.classList.contains('error')) {
+    showToast('⚠️ Fix YAML errors before saving', 'warn');
+    lintBar.style.animation = 'none';
+    requestAnimationFrame(() => { lintBar.style.animation = ''; lintBar.style.outline = '2px solid #f87171'; });
+    setTimeout(() => { if (lintBar) lintBar.style.outline = ''; }, 1500);
+    return;
+  }
+  const content = typeof window._cmGetValue === 'function' ? window._cmGetValue() : '';
+  try {
+    const res = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+    showToast('✅ config.yaml saved (backup written to config.yaml.bak)');
+    closeConfigEdit();
+    await loadConfig();   // refresh the read-only view
+  } catch (e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+// ── AGENT STATUS ──────────────────────────────────────────────
+async function loadAgentStatus() {
+  const el = document.getElementById('status-content');
+  el.innerHTML = '<p class="empty">Loading status…</p>';
+  try {
+    const d = await fetch('/api/agent-status').then(r => r.json());
+    const gw = d.gateway || {};
+    const gwUp = gw.running;
+    const gwBadge = gwUp
+      ? `<span class="badge badge-ok">● Running</span>`
+      : `<span class="badge badge-error">● Down</span>`;
+
+    const platRows = (d.platforms || []).map(p => `
+      <tr>
+        <td>${escHtml(p.name)}</td>
+        <td>${p.ok
+          ? '<span class="badge badge-ok">✓ configured</span>'
+          : '<span class="badge badge-muted">✗ not set</span>'}</td>
+        <td style="font-size:11px;color:var(--muted)">${escHtml(p.note || '')}</td>
+      </tr>`).join('');
+
+    const keyRows = (d.apiKeys || []).map(k => `
+      <tr>
+        <td>${escHtml(k.name)}</td>
+        <td>${k.ok
+          ? '<span class="badge badge-ok">✓ set</span>'
+          : '<span class="badge badge-muted">✗ not set</span>'}</td>
+      </tr>`).join('');
+
+    const authRows = (d.authProviders || []).map(a => `
+      <tr>
+        <td>${escHtml(a.name)}</td>
+        <td>${a.ok
+          ? '<span class="badge badge-ok">✓ logged in</span>'
+          : '<span class="badge badge-muted">✗ not logged in</span>'}</td>
+        <td style="font-size:11px;color:var(--muted)">${escHtml(a.note || '')}</td>
+      </tr>`).join('');
+
+    // Detect if active provider is OAuth-based (GitHub Copilot, etc.)
+    const isOAuthProvider = (d.agent?.provider || '').toLowerCase().includes('copilot') ||
+                            (d.agent?.provider || '').toLowerCase().includes('oauth');
+
+    const logLines = (gw.logTail || []).map(l => {
+      const s = escHtml(l);
+      if (/\b(ERROR|FATAL|CRITICAL)\b/i.test(l))  return `<span style="color:#f87171;background:rgba(248,113,113,.08);display:block">${s}</span>`;
+      if (/\bWARN(ING)?\b/i.test(l))               return `<span style="color:#fbbf24;background:rgba(251,191,36,.07);display:block">${s}</span>`;
+      if (/\b(INFO|SUCCESS|✅|✓)\b/i.test(l))      return `<span style="color:#86efac;display:block">${s}</span>`;
+      if (/\bDEBUG\b/i.test(l))                    return `<span style="color:#94a3b8;display:block">${s}</span>`;
+      return `<span style="display:block">${s}</span>`;
+    }).join('');
+    const ps = gw.processStats || {};
+    const env = d.environment || {};
+    const tb = d.terminalBackend || {};
+
+    // Format uptime mm:ss → "Xh Ym" or "Xm Ys"
+    function fmtUptime(e) {
+      if (!e) return '—';
+      const parts = e.split(':').map(Number);
+      if (parts.length === 3) return `${parts[0]}h ${parts[1]}m`;
+      if (parts.length === 2) return `${parts[0]}m ${parts[1]}s`;
+      return e;
+    }
+
+    // Cron job rows
+    const cronJobRows = (d.cron?.jobs || []).map(j => `
+      <tr>
+        <td style="font-size:11px;font-family:monospace;color:var(--muted)">${escHtml(j.id?.slice(0,8))}…</td>
+        <td>${escHtml(j.name || '—')}</td>
+        <td><code style="font-size:10px">${escHtml(j.schedule || '—')}</code></td>
+        <td><span class="badge ${j.state === 'active' ? 'badge-ok' : 'badge-muted'}">${escHtml(j.state || '—')}</span></td>
+        <td style="font-size:10px;color:var(--muted)">${escHtml(j.next_run ? j.next_run.replace('T', ' ').slice(0,16) : '—')}</td>
+        <td style="font-size:10px;color:var(--muted)">${escHtml(j.last_run ? j.last_run.replace('T', ' ').slice(0,16) : '—')}</td>
+      </tr>`).join('');
+
+    el.innerHTML = `
+      <!-- Row 1: Gateway + Agent -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+        <!-- Gateway Card -->
+        <div class="card" style="border-left:4px solid ${gwUp ? 'var(--ok)' : 'var(--err)'}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div>
+              <div style="font-size:13px;font-weight:700;margin-bottom:4px">🌐 Gateway Service</div>
+              <div style="display:flex;align-items:center;gap:8px">${gwBadge}
+                ${gw.pid ? `<span style="font-size:11px;color:var(--muted)">PID ${escHtml(gw.pid)}</span>` : ''}
+                ${gw.manager ? `<span style="font-size:11px;color:var(--muted)">${escHtml(gw.manager)}</span>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn-sm btn-primary" onclick="gatewayAction('start')" title="Start gateway" ${gwUp ? 'disabled style="opacity:.4"' : ''}>▶ Start</button>
+              <button class="btn-sm btn-secondary" onclick="gatewayAction('restart')" title="Restart gateway">↺ Restart</button>
+              <button class="btn-sm btn-danger" onclick="gatewayAction('stop')" title="Stop gateway" ${!gwUp ? 'disabled style="opacity:.4"' : ''}>■ Stop</button>
+            </div>
+          </div>
+          ${gwUp && ps.memoryMB ? `
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px">
+            <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:18px;font-weight:700;color:var(--ok)">${escHtml(ps.memoryMB)}</div>
+              <div style="font-size:10px;color:var(--muted)">MB RAM</div>
+            </div>
+            <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:18px;font-weight:700;color:var(--accent)">${escHtml(ps.cpuPct)}%</div>
+              <div style="font-size:10px;color:var(--muted)">CPU</div>
+            </div>
+            <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:18px;font-weight:700;color:var(--text)">${escHtml(ps.memPct)}%</div>
+              <div style="font-size:10px;color:var(--muted)">MEM%</div>
+            </div>
+            <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:700;color:var(--text)">${escHtml(fmtUptime(ps.uptime))}</div>
+              <div style="font-size:10px;color:var(--muted)">Uptime</div>
+            </div>
+          </div>` : (!gwUp ? `<div style="font-size:12px;color:var(--err);margin-top:6px">Gateway is not running — no process stats available.</div>` : '')}
+        </div>
+
+        <!-- Agent + Environment Card -->
+        <div class="card" style="border-left:4px solid var(--accent)">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">🤖 Hermes Agent</div>
+          <table style="width:100%;font-size:12px;border:none;background:transparent">
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0;white-space:nowrap">Model</td><td style="font-weight:600">${escHtml(d.agent?.model || '—')}</td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">Provider</td><td>
+              ${escHtml(d.agent?.provider || '—')}
+              ${isOAuthProvider ? '<span style="font-size:10px;color:var(--accent);margin-left:6px;background:rgba(139,92,246,.15);padding:1px 6px;border-radius:10px">OAuth</span>' : ''}
+            </td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">Python</td><td style="font-family:monospace;font-size:11px">${escHtml(env['Python'] || '—')}</td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">Project</td><td style="font-family:monospace;font-size:10px;word-break:break-all">${escHtml(env['Project'] || '—')}</td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">.env file</td><td>${env['.env file'] === '✓ exists' ? '<span class="badge badge-ok">✓ exists</span>' : '<span class="badge badge-muted">✗ missing</span>'}</td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">Terminal</td><td>${escHtml(tb['Backend'] || '—')} ${tb['Sudo'] ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">sudo: ${escHtml(tb['Sudo'])}</span>` : ''}</td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">Sessions</td><td>${d.sessions?.active ?? '—'} active</td></tr>
+            <tr><td style="color:var(--muted);padding:3px 8px 3px 0">Cron Jobs</td><td>${d.cron?.active ?? 0} active / ${d.cron?.total ?? 0} total</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Row 2: Cron Jobs (full width) -->
+      ${cronJobRows ? `
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">⏰ Scheduled Jobs</div>
+        <table style="width:100%;font-size:12px">
+          <thead><tr><th>ID</th><th>Name</th><th>Schedule</th><th>State</th><th>Next Run</th><th>Last Run</th></tr></thead>
+          <tbody>${cronJobRows}</tbody>
+        </table>
+      </div>` : ''}
+
+      <!-- Row 3: Messaging Platforms + Auth & API Keys -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+        <!-- Messaging Platforms -->
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">💬 Messaging Platforms</div>
+          ${platRows ? `<table style="width:100%"><thead><tr><th>Platform</th><th>Status</th><th>Note</th></tr></thead><tbody>${platRows}</tbody></table>`
+            : '<p style="font-size:12px;color:var(--muted)">No platform data available.</p>'}
+        </div>
+
+        <!-- API Keys + Auth Providers -->
+        <div class="card">
+          ${authRows ? `
+            <div style="font-size:13px;font-weight:700;margin-bottom:6px">🔐 Auth Providers <span style="font-size:10px;font-weight:400;color:var(--muted)">(OAuth / token-based)</span></div>
+            ${isOAuthProvider ? `<div style="font-size:11px;color:var(--accent);background:rgba(139,92,246,.1);border-radius:6px;padding:6px 10px;margin-bottom:8px">ℹ️ <strong>${escHtml(d.agent?.provider)}</strong> uses OAuth — no API key needed. The GitHub API Key row below is unrelated.</div>` : ''}
+            <table style="width:100%;margin-bottom:14px"><thead><tr><th>Provider</th><th>Status</th><th>Note</th></tr></thead><tbody>${authRows}</tbody></table>
+          ` : ''}
+          <div style="font-size:13px;font-weight:700;margin-bottom:6px">🔑 API Keys <span style="font-size:10px;font-weight:400;color:var(--muted)">(third-party services)</span></div>
+          ${keyRows ? `<table style="width:100%;max-height:220px;overflow-y:auto;display:block"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody>${keyRows}</tbody></table>`
+            : '<p style="font-size:12px;color:var(--muted)">No API key data available.</p>'}
+        </div>
+      </div>
+
+      <!-- Row 4: Gateway Log (live WebSocket) -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px">
+            📄 Gateway Log
+            <span id="gw-ws-badge" style="font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;background:#374151;color:#9ca3af">⏳ connecting…</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" id="gw-log-autoscroll" checked onchange="gwLogAutoScroll=this.checked"> auto-scroll
+            </label>
+            <button class="btn-sm btn-secondary" onclick="gwLogClear()">🗑 Clear</button>
+          </div>
+        </div>
+        <pre id="gw-log-pre" style="background:#0b1220;color:#e2e8f0;padding:12px;border-radius:6px;font-size:11px;overflow:auto;max-height:380px;white-space:pre-wrap;word-break:break-all"></pre>
+      </div>
+    `;
+    // Kick off live WebSocket log streaming
+    startLogStream();
+  } catch (e) {
+    el.innerHTML = `<p class="empty">Error loading status: ${escHtml(e.message)}</p>`;
+  }
+}
+
+async function gatewayAction(action) {
+  const labels = { start: 'Starting', stop: 'Stopping', restart: 'Restarting' };
+  toast(`${labels[action] || action} gateway…`);
+
+  // Disable all gateway buttons while running
+  document.querySelectorAll('#agent-status-tab .btn-sm').forEach(b => b.disabled = true);
+
+  try {
+    const res = await fetch(`/api/gateway/${action}`, { method: 'POST' }).then(r => r.json());
+    if (res.ok) {
+      toast(`✅ Gateway ${action} succeeded`);
+    } else {
+      // Show actual error output so we know what went wrong
+      const detail = res.output?.trim()?.slice(0, 200) || `exit code ${res.exitCode}`;
+      toast(`⚠️ Gateway ${action} failed: ${detail}`, 6000);
+      console.error('Gateway action failed:', res);
+    }
+  } catch (e) {
+    toast(`❌ Error: ${e.message}`, 5000);
+  }
+
+  // Wait longer for launchd/systemd to fully settle before refreshing
+  const delay = action === 'restart' ? 4000 : 2500;
+  setTimeout(loadAgentStatus, delay);
+}
+
+// ── Live WebSocket log streaming ──────────────────────────────
+let _gwSocket = null;
+let gwLogAutoScroll = true;
+const MAX_LOG_LINES = 500; // keep DOM lean
+
+function colorLogLine(line) {
+  const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (/error|fatal|critical/i.test(line))
+    return `<span style="color:#f87171;background:rgba(248,113,113,.08)">${esc}</span>`;
+  if (/warn(?:ing)?/i.test(line))
+    return `<span style="color:#fbbf24;background:rgba(251,191,36,.08)">${esc}</span>`;
+  if (/\binfo\b|success|✅|✓/i.test(line))
+    return `<span style="color:#86efac">${esc}</span>`;
+  if (/\bdebug\b/i.test(line))
+    return `<span style="color:#6b7280">${esc}</span>`;
+  return `<span>${esc}</span>`;
+}
+
+function gwLogAppend(lines) {
+  const pre = document.getElementById('gw-log-pre');
+  if (!pre) return;
+  const frag = document.createDocumentFragment();
+  lines.forEach(l => {
+    const span = document.createElement('span');
+    span.innerHTML = colorLogLine(l) + '\n';
+    frag.appendChild(span);
+  });
+  pre.appendChild(frag);
+  // Trim to MAX_LOG_LINES children
+  while (pre.children.length > MAX_LOG_LINES) pre.removeChild(pre.firstChild);
+  if (gwLogAutoScroll) pre.scrollTop = pre.scrollHeight;
+}
+
+function gwLogClear() {
+  const pre = document.getElementById('gw-log-pre');
+  if (pre) pre.innerHTML = '';
+}
+
+function gwSetBadge(state) {
+  const badge = document.getElementById('gw-ws-badge');
+  if (!badge) return;
+  const cfg = {
+    live:        { bg:'#064e3b', color:'#34d399', text:'🟢 live' },
+    reconnecting:{ bg:'#78350f', color:'#fbbf24', text:'🟡 reconnecting…' },
+    closed:      { bg:'#374151', color:'#9ca3af', text:'⚫ disconnected' },
+    connecting:  { bg:'#374151', color:'#9ca3af', text:'⏳ connecting…' },
+  };
+  const c = cfg[state] || cfg.connecting;
+  Object.assign(badge.style, { background: c.bg, color: c.color });
+  badge.textContent = c.text;
+}
+
+function stopLogStream() {
+  if (_gwSocket) {
+    _gwSocket.onclose = null; // prevent auto-reconnect
+    _gwSocket.close();
+    _gwSocket = null;
+  }
+}
+
+let _gwReconnectTimer = null;
+function startLogStream() {
+  stopLogStream();
+  clearTimeout(_gwReconnectTimer);
+  gwSetBadge('connecting');
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/log`);
+  _gwSocket = ws;
+
+  ws.onopen = () => gwSetBadge('live');
+
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'init') {
+        gwLogClear();
+        gwLogAppend(msg.lines);
+      } else if (msg.type === 'lines') {
+        gwLogAppend(msg.lines);
+      }
+    } catch {}
+  };
+
+  ws.onerror = () => gwSetBadge('reconnecting');
+
+  ws.onclose = () => {
+    _gwSocket = null;
+    gwSetBadge('reconnecting');
+    // Auto-reconnect after 3s only if the status tab is visible
+    _gwReconnectTimer = setTimeout(() => {
+      const tab = document.getElementById('agent-status-tab');
+      if (tab && tab.style.display !== 'none') startLogStream();
+    }, 3000);
+  };
+}
+
+// Stop the stream when navigating away from the status tab
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.nav-link');
+  if (link && link.dataset.tab && link.dataset.tab !== 'agent-status') {
+    stopLogStream();
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────
+loadCron();
+</script>
+
+<!-- ── Skill Detail Modal ──────────────────────────────────────── -->
+<div id="skill-detail-modal">
+  <div class="skill-modal-box">
+    <!-- Header -->
+    <div class="skill-modal-header">
+      <div class="skill-modal-header-left">
+        <span class="skill-modal-title" id="skill-modal-title">Skill Detail</span>
+        <span class="skill-modal-badge enabled" id="skill-modal-badge">● Enabled</span>
+      </div>
+      <div class="skill-modal-header-right">
+        <button class="skill-modal-copy" id="skill-modal-copy-btn" onclick="copySkillContent()" title="Copy raw markdown">⎘ Copy</button>
+        <button class="skill-modal-close" onclick="closeSkillDetail()" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <!-- Meta bar -->
+    <div class="skill-modal-meta">
+      <span class="skill-modal-cat" id="skill-modal-cat">—</span>
+      <span class="skill-modal-path" id="skill-modal-path"></span>
+      <span class="skill-modal-desc" id="skill-modal-meta-desc"></span>
+    </div>
+    <!-- Scrollable body -->
+    <div class="skill-modal-body">
+      <div id="skill-modal-body-inner"><div class="skill-modal-loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Card Detail Modal ──────────────────────────────────────── -->
+<!-- ADD CARD MODAL -->
+<div id="add-card-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)">
+  <div style="background:var(--bg2,#1e1e2e);border:1px solid var(--border,#333);border-radius:14px;width:100%;max-width:480px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h3 style="margin:0;font-size:16px;font-weight:700">➕ Add New Card</h3>
+      <button onclick="closeAddCardModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:6px">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Title *</label>
+        <input id="acm-title" type="text" placeholder="Card title…" autofocus
+          style="width:100%;padding:9px 12px;border:1px solid var(--border,#333);border-radius:8px;font-size:14px;background:var(--bg,#13131f);color:var(--text,#e2e8f0);outline:none;box-sizing:border-box"
+          onkeydown="if(event.key==='Enter')submitAddCard()">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Description</label>
+        <textarea id="acm-desc" placeholder="Optional description…" rows="3"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border,#333);border-radius:8px;font-size:13px;background:var(--bg,#13131f);color:var(--text,#e2e8f0);outline:none;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div style="flex:1">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Column</label>
+          <select id="acm-col" style="width:100%;padding:8px 10px;border:1px solid var(--border,#333);border-radius:8px;font-size:13px;background:var(--bg,#13131f);color:var(--text,#e2e8f0);outline:none">
+            <option value="todo">📋 To Do</option>
+            <option value="doing">⚡ In Progress</option>
+            <option value="done">✅ Done</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Priority</label>
+          <select id="acm-pri" style="width:100%;padding:8px 10px;border:1px solid var(--border,#333);border-radius:8px;font-size:13px;background:var(--bg,#13131f);color:var(--text,#e2e8f0);outline:none">
+            <option value="none">— None</option>
+            <option value="low">🟢 Low</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="high">🔴 High</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+        <button onclick="closeAddCardModal()" style="padding:9px 18px;border:1px solid var(--border,#333);border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500">Cancel</button>
+        <button id="acm-submit-btn" onclick="submitAddCard()" style="padding:9px 22px;border:none;border-radius:8px;background:var(--accent,#7c3aed);color:#fff;cursor:pointer;font-size:13px;font-weight:600">Add Card</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="card-detail-modal">
+  <div class="card-modal-box">
+
+    <!-- ── Header ── -->
+    <div class="card-modal-header">
+      <div class="card-modal-header-left">
+        <span id="cd-title-view">Card</span>
+        <input id="cd-title-input" type="text" placeholder="Card title…" />
+        <span class="card-modal-col-badge" id="cd-col-badge"></span>
+      </div>
+      <div class="card-modal-header-right">
+        <button class="card-modal-edit-btn" id="cd-edit-btn" onclick="cdToggleEdit()">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"/></svg>
+          <span id="cd-edit-btn-label">Edit</span>
+        </button>
+        <button class="card-modal-close" onclick="closeCardDetail()" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+
+    <!-- ── Edit mode banner ── -->
+    <div class="card-modal-edit-banner">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"/></svg>
+      Editing — make your changes then click Save
+    </div>
+
+    <!-- ── Meta bar ── -->
+    <div class="card-modal-meta">
+      <div class="card-modal-meta-item">
+        <strong>Priority</strong>
+        <span id="cd-pri-view"></span>
+        <select id="cd-priority" style="display:none">
+          <option value="none">— None</option>
+          <option value="low">🟢 Low</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="high">🔴 High</option>
+        </select>
+      </div>
+      <div class="card-modal-meta-item" id="cd-col-meta"></div>
+    </div>
+
+    <!-- ── Scrollable body ── -->
+    <div class="card-modal-body">
+      <!-- Description field -->
+      <div class="cd-field">
+        <div class="cd-field-label">Description</div>
+        <div id="cd-notes-view"></div>
+        <div id="cd-notes-label">Notes</div>
+        <textarea id="cd-notes-edit" placeholder="Add a description, links, context…"></textarea>
+      </div>
+    </div>
+
+    <!-- ── Footer (edit mode only) ── -->
+    <div class="card-modal-footer" id="cd-footer">
+      <button class="card-modal-save" onclick="saveCardDetail()">
+        💾 Save Changes
+      </button>
+      <button class="card-modal-cancel" onclick="cdCancelEdit()">Cancel</button>
+      <span class="card-modal-saved" id="cd-saved-flash">✅ Saved!</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Card Detail Modal ──────────────────────────────────────
+let _cdCardId = null, _cdEditing = false, _cdOrigCard = null;
+
+function _cdColLabel(colId, colTitle) {
+  return colTitle || colId || '—';
+}
+
+function _cdColBadgeStyle(colId) {
+  const map = {
+    todo: 'background:#1e40af22;color:#60a5fa;border:1px solid #1e40af44',
+    doing: 'background:#92400e22;color:#fbbf24;border:1px solid #92400e44',
+    done: 'background:#16a34a22;color:#4ade80;border:1px solid #16a34a44',
+  };
+  return map[colId] || 'background:#6b728022;color:#9ca3af;border:1px solid #6b728044';
+}
+
+function _priLabel(p) {
+  return p === 'high' ? '🔴 High' : p === 'medium' ? '🟡 Medium' : p === 'low' ? '🟢 Low' : '— None';
+}
+
+function openCardDetail(cardId) {
+  if (!kanbanData) return;
+  let card = null, col = null;
+  for (const c of kanbanData.columns) { const f = c.cards.find(x => x.id === cardId); if (f) { card = f; col = c; break; } }
+  if (!card) return;
+  _cdCardId = cardId;
+  _cdOrigCard = { title: card.title, priority: card.priority, notes: card.notes || card.desc || '' };
+  _cdEditing = false;
+
+  // Header
+  document.getElementById('cd-title-view').textContent = card.title || '';
+  document.getElementById('cd-title-input').value = card.title || '';
+  document.getElementById('cd-title-input').style.display = 'none';
+  document.getElementById('cd-title-view').style.display = '';
+
+  // Column badge
+  const badge = document.getElementById('cd-col-badge');
+  badge.textContent = _cdColLabel(col?.id, col?.title);
+  badge.style.cssText = _cdColBadgeStyle(col?.id);
+
+  // Meta bar
+  const pri = card.priority || 'none';
+  document.getElementById('cd-pri-view').textContent = _priLabel(pri);
+  document.getElementById('cd-pri-view').style.display = '';
+  document.getElementById('cd-priority').value = pri;
+  document.getElementById('cd-priority').style.display = 'none';
+  const colMeta = document.getElementById('cd-col-meta');
+  colMeta.textContent = col ? `📋 ${_cdColLabel(col.id, col.title)}` : '';
+
+  // Body
+  const notes = card.notes || card.desc || '';
+  document.getElementById('cd-notes-view').textContent = notes;
+  document.getElementById('cd-notes-view').style.display = '';
+  document.getElementById('cd-notes-edit').value = notes;
+  document.getElementById('cd-notes-edit').style.display = 'none';
+
+  // Footer / edit btn / editing state
+  document.getElementById('cd-footer').classList.remove('show');
+  document.getElementById('cd-edit-btn-label').textContent = 'Edit';
+  document.getElementById('cd-saved-flash').classList.remove('show');
+  document.querySelector('.card-modal-box').classList.remove('editing');
+
+  const el = document.getElementById('card-detail-modal');
+  el.classList.add('open');
+  el.style.display = '';
+}
+
+function cdToggleEdit() {
+  _cdEditing = !_cdEditing;
+  const box = document.querySelector('.card-modal-box');
+  box.classList.toggle('editing', _cdEditing);
+
+  // Title: swap view ↔ input
+  document.getElementById('cd-title-view').style.display = _cdEditing ? 'none' : '';
+  document.getElementById('cd-title-input').style.display = _cdEditing ? 'block' : 'none';
+
+  // Priority: swap chip ↔ select
+  document.getElementById('cd-pri-view').style.display = _cdEditing ? 'none' : '';
+  document.getElementById('cd-priority').style.display = _cdEditing ? 'inline-block' : 'none';
+
+  // Notes: swap view ↔ textarea
+  document.getElementById('cd-notes-view').style.display = _cdEditing ? 'none' : '';
+  document.getElementById('cd-notes-edit').style.display = _cdEditing ? 'block' : 'none';
+
+  // Footer & button label
+  document.getElementById('cd-footer').classList.toggle('show', _cdEditing);
+  document.getElementById('cd-edit-btn-label').textContent = _cdEditing ? 'View' : 'Edit';
+
+  if (_cdEditing) document.getElementById('cd-title-input').focus();
+}
+
+function cdCancelEdit() {
+  if (_cdOrigCard) {
+    document.getElementById('cd-title-input').value = _cdOrigCard.title;
+    document.getElementById('cd-notes-edit').value = _cdOrigCard.notes;
+    document.getElementById('cd-priority').value = _cdOrigCard.priority || 'none';
+  }
+  _cdEditing = true; cdToggleEdit();
+}
+
+function closeCardDetail() {
+  if (_cdEditing) {
+    if (!confirm('You have unsaved changes. Close anyway?')) return;
+  }
+  document.getElementById('card-detail-modal').classList.remove('open');
+  _cdCardId = null; _cdEditing = false; _cdOrigCard = null;
+}
+
+async function saveCardDetail() {
+  if (!_cdCardId) return;
+  const title    = document.getElementById('cd-title-input').value.trim();
+  const priority = document.getElementById('cd-priority').value;
+  const notes    = document.getElementById('cd-notes-edit').value;
+  if (!title) { alert('Title cannot be empty'); return; }
+  const btn = document.querySelector('.card-modal-save');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  try {
+    await fetch(`/api/kanban/cards/${_cdCardId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, priority, notes, desc: notes }),
+    });
+    // Update local view
+    _cdOrigCard = { title, priority, notes };
+    document.getElementById('cd-title-view').textContent = title;
+    document.getElementById('cd-notes-view').textContent = notes || '';
+
+    document.getElementById('cd-pri-view').textContent = _priLabel(priority);
+    // Flash & switch to view
+    const flash = document.getElementById('cd-saved-flash');
+    flash.classList.add('show');
+    setTimeout(() => flash.classList.remove('show'), 2000);
+    _cdEditing = true; cdToggleEdit(); // back to view
+    await loadKanban();
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+  } finally {
+    btn.textContent = '💾 Save'; btn.disabled = false;
+  }
+}
+
+// Close on backdrop click
+document.getElementById('card-detail-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('card-detail-modal')) closeCardDetail();
+});
+
+// Esc key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('card-detail-modal').classList.contains('open')) closeCardDetail();
+    if (document.getElementById('logs-modal').classList.contains('open')) closeKbLogsModal();
+  }
+});
+document.getElementById('logs-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('logs-modal')) closeKbLogsModal();
+});
+</script>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// ANALYTICS TAB
+// ══════════════════════════════════════════════════════════════
+async function loadAnalytics() {
+  const days = document.getElementById('analytics-period').value;
+  const el = document.getElementById('analytics-content');
+  el.innerHTML = '<p class="empty">Loading…</p>';
+  try {
+    const data = await fetch(`/api/hermes/analytics?days=${days}`).then(r => r.json());
+    if (data.error) { el.innerHTML = `<p class="empty">⚠️ ${data.error}</p>`; return; }
+
+    const daily = data.daily || [];
+    const totalInput = daily.reduce((s, d) => s + (d.input_tokens||0), 0);
+    const totalOutput = daily.reduce((s, d) => s + (d.output_tokens||0), 0);
+    const totalSessions = daily.reduce((s, d) => s + (d.sessions||0), 0);
+    const totalCalls = daily.reduce((s, d) => s + (d.api_calls||0), 0);
+    const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n;
+
+    // Summary cards
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px">
+      <div class="card" style="padding:20px;text-align:center">
+        <div style="font-size:28px;font-weight:700;color:var(--accent)">${fmt(totalInput+totalOutput)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Total Tokens</div>
+        <div style="font-size:11px;color:var(--muted)">${fmt(totalInput)} in / ${fmt(totalOutput)} out</div>
+      </div>
+      <div class="card" style="padding:20px;text-align:center">
+        <div style="font-size:28px;font-weight:700;color:var(--accent)">${totalSessions}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Sessions</div>
+        <div style="font-size:11px;color:var(--muted)">${(totalSessions/days).toFixed(1)}/day avg</div>
+      </div>
+      <div class="card" style="padding:20px;text-align:center">
+        <div style="font-size:28px;font-weight:700;color:var(--accent)">${fmt(totalCalls)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">API Calls</div>
+      </div>
+    </div>`;
+
+    // Bar chart (CSS-based)
+    const maxTokens = Math.max(...daily.map(d => (d.input_tokens||0)+(d.output_tokens||0)), 1);
+    html += `<div class="card" style="padding:20px;margin-bottom:24px">
+      <h3 style="margin:0 0 16px;font-size:14px">Daily Token Usage</h3>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:120px;border-bottom:1px solid var(--border);padding-bottom:8px">`;
+    daily.slice().reverse().forEach(d => {
+      const total = (d.input_tokens||0)+(d.output_tokens||0);
+      const pct = Math.round((total/maxTokens)*100);
+      const outPct = total > 0 ? Math.round(((d.output_tokens||0)/total)*100) : 0;
+      const label = d.day.slice(5); // MM-DD
+      html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:100px">
+          <div style="width:100%;height:${pct}%;background:linear-gradient(to top,var(--accent),var(--accent2));border-radius:3px 3px 0 0;min-height:2px" title="${fmt(total)} tokens"></div>
+        </div>
+        <div style="font-size:9px;color:var(--muted);white-space:nowrap">${label}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+
+    // Daily table
+    html += `<div class="card" style="overflow:hidden">
+      <table>
+        <thead><tr><th>Date</th><th>Sessions</th><th>API Calls</th><th>Input</th><th>Output</th></tr></thead>
+        <tbody>`;
+    daily.slice().reverse().forEach(d => {
+      html += `<tr>
+        <td>${d.day}</td>
+        <td>${d.sessions||0}</td>
+        <td>${d.api_calls||0}</td>
+        <td>${fmt(d.input_tokens||0)}</td>
+        <td>${fmt(d.output_tokens||0)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<p class="empty">Error: ${e.message}</p>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SESSIONS TAB
+// ══════════════════════════════════════════════════════════════
+let _sessionsOffset = 0;
+const SESSIONS_LIMIT = 20;
+
+async function loadSessions(offset=0) {
+  _sessionsOffset = offset;
+  const search = document.getElementById('sessions-search').value.trim();
+  const el = document.getElementById('sessions-content');
+  el.innerHTML = '<p class="empty">Loading…</p>';
+  try {
+    const url = search
+      ? `/api/hermes/sessions?limit=${SESSIONS_LIMIT}&offset=${offset}&search=${encodeURIComponent(search)}`
+      : `/api/hermes/sessions?limit=${SESSIONS_LIMIT}&offset=${offset}`;
+    const data = await fetch(url).then(r => r.json());
+    if (data.error) { el.innerHTML = `<p class="empty">⚠️ ${data.error}</p>`; return; }
+
+    const sessions = data.sessions || [];
+    const total = data.total || sessions.length;
+
+    if (!sessions.length) { el.innerHTML = '<p class="empty">No sessions found</p>'; return; }
+
+    const sourceColor = { telegram: '#0ea5e9', cron: '#a855f7', cli: '#22c55e', api_server: '#f59e0b' };
+    const timeAgo = ts => {
+      if (!ts) return '';
+      // Support both Unix epoch (seconds) and ISO strings
+      const ms = ts > 1e10 ? ts : ts * 1000;
+      const s = Math.floor((Date.now() - ms)/1000);
+      if (s < 60) return `${s}s ago`;
+      if (s < 3600) return `${Math.floor(s/60)}m ago`;
+      if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+      return `${Math.floor(s/86400)}d ago`;
+    };
+
+    let html = `<div class="card" style="overflow:hidden"><table>
+      <thead><tr><th>Session</th><th>Model</th><th>Msgs</th><th>Source</th><th>Time</th></tr></thead><tbody>`;
+    sessions.forEach(s => {
+      const src = (s.source||'').toLowerCase();
+      const color = sourceColor[src] || '#6b7280';
+      const preview = (s.first_message||s.title||s.id||'').substring(0,60);
+      const title = s.title && s.title !== s.id ? s.title : preview;
+      html += `<tr style="cursor:pointer" onclick="viewSession('${s.id}')">
+        <td style="max-width:320px">
+          <div style="font-weight:500;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(title||s.id)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(preview)}</div>
+        </td>
+        <td style="font-size:11px;white-space:nowrap">${s.model||'-'}</td>
+        <td style="font-size:12px">${s.message_count||0}</td>
+        <td><span style="background:${color}22;color:${color};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">${src.toUpperCase()}</span></td>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${timeAgo(s.started_at||s.created_at)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+    el.innerHTML = html;
+
+    // Pagination
+    const pages = Math.ceil(total / SESSIONS_LIMIT);
+    const curPage = Math.floor(offset / SESSIONS_LIMIT);
+    const pg = document.getElementById('sessions-pagination');
+    pg.innerHTML = '';
+    if (pages > 1) {
+      if (curPage > 0) {
+        const b = document.createElement('button'); b.className='btn-secondary'; b.textContent='← Prev';
+        b.onclick=()=>loadSessions(offset-SESSIONS_LIMIT); pg.appendChild(b);
+      }
+      const info = document.createElement('span');
+      info.style.cssText='font-size:12px;color:var(--muted);line-height:30px';
+      info.textContent = `Page ${curPage+1} of ${pages} (${total} total)`;
+      pg.appendChild(info);
+      if (curPage < pages-1) {
+        const b = document.createElement('button'); b.className='btn-secondary'; b.textContent='Next →';
+        b.onclick=()=>loadSessions(offset+SESSIONS_LIMIT); pg.appendChild(b);
+      }
+    }
+  } catch(e) {
+    el.innerHTML = `<p class="empty">Error: ${e.message}</p>`;
+  }
+}
+
+async function viewSession(id) {
+  try {
+    const data = await fetch(`/api/hermes/session/${id}`).then(r => r.json());
+    const msgs = data.messages || data || [];
+    if (!msgs.length) { showToast('No messages in this session'); return; }
+    const html = msgs.map(m => {
+      const role = (m.role||'').toUpperCase();
+      const color = role==='USER'?'var(--accent)':role==='ASSISTANT'?'var(--ok)':'var(--muted)';
+      const content = (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).substring(0,500);
+      return `<div style="margin-bottom:12px"><span style="font-size:10px;font-weight:700;color:${color}">${escHtml(role)}</span><div style="margin-top:4px;font-size:12px;white-space:pre-wrap">${escHtml(content)}${content.length>=500?'…':''}</div></div>`;
+    }).join('');
+    document.getElementById('modal-content').innerHTML = `<h3 style="margin:0 0 16px">Session: ${id}</h3><div style="max-height:60vh;overflow-y:auto">${html}</div>`;
+    document.getElementById('modal-action-btn').style.display='none';
+    // Always ensure the close button is enabled (may have been disabled by a cron run)
+    const closeBtn = document.querySelector('#modal .modal-box button');
+    if (closeBtn) closeBtn.disabled = false;
+    document.getElementById('modal').classList.add('open');
+  } catch(e) { showToast('Failed to load session: ' + e.message); }
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══════════════════════════════════════════════════════════════
+// LOGS TAB
+// ══════════════════════════════════════════════════════════════
+let _logsTimer = null;
+
+async function loadLogs() {
+  const file = document.getElementById('logs-file').value;
+  const level = document.getElementById('logs-level').value;
+  const lines = document.getElementById('logs-lines').value;
+  const el = document.getElementById('logs-content');
+  try {
+    const data = await fetch(`/api/hermes/logs?file=${file}&level=${level}&lines=${lines}`).then(r => r.json());
+    if (data.error) { el.innerHTML = `<span style="color:#ef4444">⚠️ ${data.error}</span>`; return; }
+    let logLines = data.lines || [];
+    if (level !== 'all') {
+      const lvlUpper = level.toUpperCase();
+      // Match both short and long variants: WARNING matches WARN and WARNING
+      const variants = lvlUpper === 'WARNING' ? ['WARNING', 'WARN'] : [lvlUpper];
+      logLines = logLines.filter(l => {
+        const u = l.toUpperCase();
+        return variants.some(v => u.includes(` ${v} `) || u.includes(` ${v}:`) || u.includes(`[${v}]`));
+      });
+    }
+    const colorLine = l => {
+      const u = l.toUpperCase();
+      if (u.includes(' ERROR ') || u.includes(' ERROR:') || u.includes('[ERROR]') || u.includes(' CRITICAL '))
+        return `<span style="color:#ef4444;background:rgba(239,68,68,.08);display:block">${escHtml(l)}</span>`;
+      if (u.includes(' WARNING ') || u.includes(' WARN ') || u.includes(' WARN:') || u.includes('[WARNING]') || u.includes('[WARN]'))
+        return `<span style="color:#f59e0b;background:rgba(245,158,11,.08);display:block">${escHtml(l)}</span>`;
+      if (u.includes(' INFO ') || u.includes(' INFO:') || u.includes('[INFO]'))
+        return `<span style="color:#e2e8f0;display:block">${escHtml(l)}</span>`;
+      if (u.includes(' DEBUG ') || u.includes(' DEBUG:') || u.includes('[DEBUG]'))
+        return `<span style="color:#6b7280;display:block">${escHtml(l)}</span>`;
+      return `<span style="color:#94a3b8;display:block">${escHtml(l)}</span>`;
+    };
+    el.innerHTML = logLines.map(colorLine).join('\n') || '<span style="color:#6b7280">No log entries</span>';
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    el.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+  }
+}
+
+function toggleLogsAutoRefresh() {
+  const on = document.getElementById('logs-autorefresh').checked;
+  if (on) { _logsTimer = setInterval(loadLogs, 5000); }
+  else { clearInterval(_logsTimer); _logsTimer = null; }
+}
+</script>
+
+<!-- ── Archive Drawer ── -->
+<div id="archive-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:640px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--border)">
+      <h2 style="margin:0;font-size:16px">📦 Archive</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="clearArchive()">🗑 Clear all</button>
+        <button onclick="document.getElementById('archive-modal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
+      </div>
+    </div>
+    <div id="archive-list" style="overflow-y:auto;padding:16px;flex:1"></div>
+  </div>
+</div>
+
+<!-- ── Kanban Logs Modal ── -->
+<div id="logs-modal">
+  <div class="logs-modal-box">
+    <div class="logs-modal-header">
+      <span class="logs-modal-title" id="logs-modal-title">📋 Logs</span>
+      <button class="logs-modal-close" onclick="closeKbLogsModal()" title="Close">✕</button>
+    </div>
+    <pre class="logs-modal-body" id="logs-modal-body">No logs yet.</pre>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.*
+*.env
+
+# Personal runtime data (kanban state, logs)
+data/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+
+# GIF build artifacts (intermediate frames)
+screenshots/gif-frames/
+screenshots/make_gif.py
+
+# Editor
+.vscode/
+.idea/
