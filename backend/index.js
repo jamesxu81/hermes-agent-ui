@@ -97,6 +97,7 @@ app.get('/api/cron/history', (req, res) => {
     jobs.forEach(j => { jobMap[j.id] = j.name || j.id; });
 
     const allRuns = [];
+    const MATCH_WINDOW = 10 * 60 * 1000; // 10 min window for matching sessions to outputs
 
     // Scan session files for cron sessions
     if (fs.existsSync(SESSIONS_DIR)) {
@@ -129,7 +130,7 @@ app.get('/api/cron/history', (req, res) => {
               if (outMatch) {
                 const outTime = new Date(`${outMatch[1]}T${outMatch[2].replace(/-/g,':')}`)
                 const diffMs = Math.abs(outTime - runAt);
-                if (diffMs < 5 * 60 * 1000) { // within 5 min
+                if (diffMs < MATCH_WINDOW) {
                   const outContent = fs.readFileSync(path.join(outputDir, outFile), 'utf8');
                   // Extract summary from output (after ## Output or last section)
                   const lines = outContent.split('\n');
@@ -161,7 +162,7 @@ app.get('/api/cron/history', (req, res) => {
           if (job && job.last_run_at) {
             const lastRun = new Date(job.last_run_at);
             const diff = Math.abs(lastRun - runAt);
-            if (diff < 5 * 60 * 1000) {
+            if (diff < MATCH_WINDOW) {
               status = job.last_status || 'ok';
             }
           }
@@ -186,7 +187,79 @@ app.get('/api/cron/history', (req, res) => {
       }
     }
 
-    // Also include runs from output files not covered by sessions
+    // Include runs from state.db (cron sessions may not have JSON files since ~May 31 2026)
+    if (stateDb) {
+      try {
+        const dbRows = stateDb.prepare(
+          `SELECT id, model, started_at, ended_at, end_reason, input_tokens, output_tokens, cache_read_tokens
+           FROM sessions WHERE source = 'cron' AND id LIKE 'cron_%'
+           ORDER BY started_at DESC LIMIT ?`
+        ).all(limit);
+        for (const row of dbRows) {
+          const m = row.id.match(/^cron_(.+)_(\d{8})_(\d{6})$/);
+          if (!m) continue;
+          const jobId = m[1];
+          const ds = m[2], ts = m[3];
+          const runAt = new Date(`${ds.slice(0,4)}-${ds.slice(4,6)}-${ds.slice(6,8)}T${ts.slice(0,2)}:${ts.slice(2,4)}:${ts.slice(4,6)}`);
+          const tsMs = runAt.getTime();
+          const covered = allRuns.some(r => r.jobId === jobId && Math.abs(r.ts - tsMs) < MATCH_WINDOW);
+          if (covered) continue;
+          const total = (row.input_tokens || 0) + (row.output_tokens || 0) + (row.cache_read_tokens || 0);
+          const durationMs = row.started_at && row.ended_at
+            ? Math.round((row.ended_at - row.started_at) * 1000)
+            : null;
+          // Try to find output summary
+          let summary = '';
+          const outputDir = path.join(CRON_DIR, 'output', jobId);
+          if (fs.existsSync(outputDir)) {
+            const outFiles = fs.readdirSync(outputDir).filter(f => f.endsWith('.md')).sort().reverse();
+            for (const outFile of outFiles) {
+              const om = outFile.match(/^(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.md$/);
+              if (!om) continue;
+              const outTime = new Date(`${om[1]}T${om[2].replace(/-/g, ':')}`);
+              if (Math.abs(outTime - runAt) < MATCH_WINDOW) {
+                const outContent = fs.readFileSync(path.join(outputDir, outFile), 'utf8');
+                const lines = outContent.split('\n');
+                const outputIdx = lines.findIndex(l => l.startsWith('## Output') || l.startsWith('## Response'));
+                if (outputIdx >= 0) {
+                  summary = lines.slice(outputIdx + 1).join('\n').trim().slice(0, 500);
+                } else {
+                  const nonEmpty = lines.filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('**'));
+                  summary = nonEmpty.slice(-5).join(' ').trim().slice(0, 300);
+                }
+                break;
+              }
+            }
+          }
+          let status = 'ok';
+          if (row.end_reason === 'cron_complete') {
+            status = 'ok';
+          } else if (row.end_reason) {
+            status = 'error';
+          } else if (!row.ended_at) {
+            status = 'running';
+          } else {
+            status = 'error';
+          }
+          allRuns.push({
+            jobId,
+            jobName: jobMap[jobId] || jobId,
+            ts: tsMs,
+            runAt: runAt.toISOString(),
+            status,
+            model: row.model || null,
+            durationMs,
+            tokens: total || null,
+            tokensIn: row.input_tokens || null,
+            tokensOut: row.output_tokens || null,
+            tokensCacheRead: row.cache_read_tokens || null,
+            summary,
+          });
+        }
+      } catch (e) { console.warn('state.db cron query failed:', e.message); }
+    }
+
+    // Also include runs from output files not covered by sessions or state.db
     for (const jobId of Object.keys(jobMap)) {
       const outputDir = path.join(CRON_DIR, 'output', jobId);
       if (!fs.existsSync(outputDir)) continue;
@@ -197,7 +270,7 @@ app.get('/api/cron/history', (req, res) => {
         const runAt = new Date(`${outMatch[1]}T${outMatch[2].replace(/-/g,':')}`);
         const tsMs = runAt.getTime();
         // Only add if not already covered
-        const covered = allRuns.some(r => r.jobId === jobId && Math.abs(r.ts - tsMs) < 5 * 60 * 1000);
+        const covered = allRuns.some(r => r.jobId === jobId && Math.abs(r.ts - tsMs) < MATCH_WINDOW);
         if (!covered) {
           const outContent = fs.readFileSync(path.join(outputDir, outFile), 'utf8');
           const lines = outContent.split('\n');
@@ -1097,6 +1170,48 @@ app.get('/api/agent-status', (req, res) => {
   });
 });
 
+// ── Gateway logs endpoint ─────────────────────────────────────────
+function parseLogLevel(line) {
+  const u = line.toUpperCase();
+  if (u.includes('ERROR') || u.includes('CRITICAL') || u.includes('FATAL')) return 'error';
+  if (u.includes('WARN')) return 'warn';
+  return 'info';
+}
+
+function parseLogLine(raw) {
+  const tsMatch = raw.match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)/);
+  const ts = tsMatch ? tsMatch[1] : '';
+  const text = tsMatch ? raw.slice(ts.length).replace(/^\s*[|-]?\s*/, '') : raw;
+  return { ts, level: parseLogLevel(raw), text: text || raw };
+}
+
+app.get('/api/gateway/logs', (req, res) => {
+  const tail = parseInt(req.query.tail) || 200;
+  const levelFilter = (req.query.level || '').toLowerCase();
+  const searchText = (req.query.search || '').toLowerCase();
+
+  try {
+    const logPath = fs.existsSync(agentLogPath) ? agentLogPath : gatewayLogPath;
+    if (!fs.existsSync(logPath)) return res.json({ lines: [], total: 0 });
+    const raw = fs.readFileSync(logPath, 'utf8');
+    let lines = raw.split('\n').filter(Boolean);
+    const total = lines.length;
+    if (lines.length > tail) lines = lines.slice(-tail);
+    let parsed = lines.map(parseLogLine);
+    if (levelFilter && levelFilter !== 'all') {
+      parsed = parsed.filter(l => l.level === levelFilter);
+    }
+    if (searchText) {
+      parsed = parsed.filter(l =>
+        l.text.toLowerCase().includes(searchText) || l.ts.toLowerCase().includes(searchText)
+      );
+    }
+    res.json({ lines: parsed, total });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Gateway control: start / stop / restart ─────────────────────
 app.post('/api/gateway/:action', (req, res) => {
   const action = req.params.action;
@@ -1113,6 +1228,101 @@ app.post('/api/gateway/:action', (req, res) => {
   // exit code 0 = success; also treat empty stderr (launchd stop is silent) as ok
   const ok = result.status === 0 || (!result.stderr && result.status !== null);
   res.json({ ok, action, output, exitCode: result.status });
+});
+
+// ── Doctor Gateway Logs ───────────────────────────────────────
+app.get('/api/doctor/logs', (req, res) => {
+  const tail = parseInt(req.query.tail) || 200;
+  const DOCTOR_HOME = path.join(HOME, '.hermes', 'profiles', 'doctor');
+  const agentLogPath = path.join(DOCTOR_HOME, 'logs', 'agent.log');
+  const gatewayLogPath = path.join(DOCTOR_HOME, 'logs', 'gateway.log');
+  const logPath = fs.existsSync(agentLogPath) ? agentLogPath : gatewayLogPath;
+  try {
+    if (!fs.existsSync(logPath)) return res.json({ lines: [], total: 0 });
+    const raw = fs.readFileSync(logPath, 'utf8');
+    let lines = raw.split('\n').filter(Boolean);
+    const total = lines.length;
+    if (lines.length > tail) lines = lines.slice(-tail);
+    res.json({ lines: lines.map(parseLogLine), total });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Doctor Agent Status ───────────────────────────────────────
+app.get('/api/doctor-status', (req, res) => {
+  const { spawnSync } = require('child_process');
+  const DOCTOR_HOME = path.join(HOME, '.hermes', 'profiles', 'doctor');
+  const PLIST = path.join(HOME, 'Library', 'LaunchAgents', 'ai.hermes.gateway.doctor.plist');
+
+  // Check launchctl
+  const lc = spawnSync('launchctl', ['list', 'ai.hermes.gateway.doctor'], { encoding: 'utf8', timeout: 5000 });
+  const lcOut = lc.stdout || '';
+  const pidMatch = lcOut.match(/"PID"\s*=\s*(\d+)/);
+  const exitCodeMatch = lcOut.match(/"LastExitStatus"\s*=\s*(\d+)/);
+  const pid = pidMatch ? pidMatch[1] : null;
+  const lastExitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : null;
+  const running = !!pid;
+
+  // Process stats
+  const processStats = {};
+  if (pid) {
+    try {
+      const ps = spawnSync('ps', ['-p', pid, '-o', 'pid=,rss=,pcpu=,pmem=,etime='], { encoding: 'utf8', timeout: 5000 });
+      const cols = (ps.stdout || '').trim().split(/\s+/);
+      if (cols.length >= 5) {
+        processStats.pid = cols[0];
+        processStats.memoryMB = (parseInt(cols[1]) / 1024).toFixed(1);
+        processStats.cpuPct = cols[2];
+        processStats.memPct = cols[3];
+        processStats.uptime = cols[4];
+      }
+    } catch {}
+  }
+
+  // Log tails
+  let logTail = [], errorLogTail = [];
+  try {
+    const logPath = path.join(DOCTOR_HOME, 'logs', 'gateway.log');
+    if (fs.existsSync(logPath)) {
+      logTail = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).slice(-50);
+    }
+  } catch {}
+  try {
+    const errPath = path.join(DOCTOR_HOME, 'logs', 'gateway.error.log');
+    if (fs.existsSync(errPath)) {
+      errorLogTail = fs.readFileSync(errPath, 'utf8').split('\n').filter(Boolean).slice(-20);
+    }
+  } catch {}
+
+  res.json({ running, pid, lastExitCode, processStats, logTail, errorLogTail, plistExists: fs.existsSync(PLIST) });
+});
+
+// ── Doctor Gateway Control ────────────────────────────────────
+app.post('/api/doctor-gateway/:action', (req, res) => {
+  const action = req.params.action;
+  if (!['start', 'stop', 'restart'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action.' });
+  }
+  const { spawnSync } = require('child_process');
+  const PLIST = path.join(HOME, 'Library', 'LaunchAgents', 'ai.hermes.gateway.doctor.plist');
+  let ok = false, output = '';
+
+  if (action === 'stop' || action === 'restart') {
+    const r = spawnSync('launchctl', ['unload', PLIST], { encoding: 'utf8', timeout: 10000 });
+    output += (r.stdout || '') + (r.stderr || '');
+  }
+  if (action === 'start' || action === 'restart') {
+    // small delay for restart
+    if (action === 'restart') { const s = Date.now(); while (Date.now() - s < 1000) {} }
+    const r = spawnSync('launchctl', ['load', PLIST], { encoding: 'utf8', timeout: 10000 });
+    output += (r.stdout || '') + (r.stderr || '');
+    ok = r.status === 0;
+  } else {
+    ok = true; // stop is always ok
+  }
+
+  res.json({ ok, action, output });
 });
 
 // ── Dashboard config (app name, etc.) ────────────────────────
@@ -1169,7 +1379,13 @@ function initLogWatch() {
       _logPos = stat.size;
 
       const newLines = buf.toString('utf8').split('\n').filter(Boolean);
-      if (newLines.length) broadcast({ type: 'lines', lines: newLines });
+      if (newLines.length) {
+        broadcast({ type: 'lines', lines: newLines });
+        // Also broadcast structured log:line events for the Logs tab
+        for (const line of newLines) {
+          broadcast({ type: 'log:line', data: parseLogLine(line) });
+        }
+      }
     } catch (e) {
       console.warn('[ws-log] watch error:', e.message);
     }

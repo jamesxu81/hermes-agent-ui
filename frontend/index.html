@@ -19,6 +19,9 @@
   /* Main */
   #main{flex:1;overflow:auto;padding:24px}
   .tab{display:none}.tab.active{display:block}
+  .logs-filter-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s}
+  .logs-filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .logs-filter-btn:hover:not(.active){background:var(--bg3,#1e2736);color:var(--text)}
   h2{font-size:20px;font-weight:700;margin-bottom:16px}
   /* Cards */
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
@@ -625,32 +628,28 @@ window._cmDestroy = function() {
   <!-- ── Logs Tab ───────────────────────────────────────── -->
   <div id="tab-logs" class="tab">
     <div class="section-header">
-      <h2>📜 Logs</h2>
+      <h2>📋 Gateway Logs</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="logs-file" onchange="loadLogs()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
-          <option value="agent">agent</option>
-          <option value="errors">errors</option>
-          <option value="gateway">gateway</option>
+        <select id="logs-agent-select" onchange="onLogsAgentChange()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px;cursor:pointer">
+          <option value="hermes">🤖 Hermes Gateway</option>
+          <option value="doctor">🩺 Doctor Gateway</option>
         </select>
-        <select id="logs-level" onchange="loadLogs()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
-          <option value="all">All levels</option>
-          <option value="info">INFO</option>
-          <option value="warning">WARNING</option>
-          <option value="error">ERROR</option>
-        </select>
-        <select id="logs-lines" onchange="loadLogs()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);font-size:12px">
-          <option value="50">50 lines</option>
-          <option value="100" selected>100 lines</option>
-          <option value="200">200 lines</option>
-          <option value="500">500 lines</option>
-        </select>
+        <button id="logs-filter-all" class="logs-filter-btn active" onclick="setLogsFilter('all')">All</button>
+        <button id="logs-filter-error" class="logs-filter-btn" onclick="setLogsFilter('error')">Errors</button>
+        <button id="logs-filter-warn" class="logs-filter-btn" onclick="setLogsFilter('warn')">Warnings</button>
+        <input id="logs-search" type="text" placeholder="🔍 Search logs…" oninput="applyLogsFilter()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px;width:160px">
+        <span id="logs-stats" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
         <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px">
-          <input type="checkbox" id="logs-autorefresh" onchange="toggleLogsAutoRefresh()"> Auto
+          <input type="checkbox" id="logs-autoscroll" checked> ↓ Auto-scroll
         </label>
-        <button class="refresh-btn" onclick="loadLogs()">↻ Refresh</button>
+        <button class="refresh-btn" onclick="loadGatewayLogs()">↻ Refresh</button>
+        <button class="refresh-btn" onclick="clearLogsDisplay()">🗑 Clear</button>
+        <button class="refresh-btn" onclick="loadMoreLogs()">⬇ Load more</button>
       </div>
     </div>
-    <div id="logs-content" style="background:#0b1220;border-radius:10px;padding:16px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0;max-height:600px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><span style="color:#6b7280">Loading…</span></div>
+    <div id="logs-output" style="background:#0d1117;border-radius:10px;padding:12px 16px;font-family:monospace;font-size:11px;line-height:1.7;overflow-y:auto;max-height:calc(100vh - 220px);white-space:pre-wrap;word-break:break-all">
+      <span style="color:#6b7280">Loading…</span>
+    </div>
   </div>
 
 </div>
@@ -687,7 +686,7 @@ function show(tab) {
   if (tab === 'status') loadAgentStatus();
   if (tab === 'analytics') loadAnalytics();
   if (tab === 'sessions') loadSessions(0);
-  if (tab === 'logs') loadLogs();
+  if (tab === 'logs') { _logsUnread = 0; const ni = document.querySelector('[data-tab="logs"] .icon'); if(ni) ni.textContent='📋'; loadLogs(); }
 }
 
 // ── Toast ─────────────────────────────────────────────────────
@@ -2105,7 +2104,10 @@ async function loadAgentStatus() {
   const el = document.getElementById('status-content');
   el.innerHTML = '<p class="empty">Loading status…</p>';
   try {
-    const d = await fetch('/api/agent-status').then(r => r.json());
+    const [d, doc] = await Promise.all([
+      fetch('/api/agent-status').then(r => r.json()),
+      fetch('/api/doctor-status').then(r => r.json()).catch(() => ({})),
+    ]);
     const gw = d.gateway || {};
     const gwUp = gw.running;
     const gwBadge = gwUp
@@ -2234,6 +2236,50 @@ async function loadAgentStatus() {
         </div>
       </div>
 
+      <!-- Row 1b: Doctor Agent Card (full width) -->
+      <div class="card" style="margin-bottom:16px;border-left:4px solid ${doc.running ? '#10b981' : doc.lastExitCode > 0 ? 'var(--err)' : '#6b7280'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:13px;font-weight:700;margin-bottom:4px">🩺 Doctor Agent <span style="font-size:10px;font-weight:400;color:var(--muted);background:rgba(139,92,246,.12);padding:2px 7px;border-radius:10px;margin-left:6px">profile: doctor</span></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${doc.running
+                ? `<span class="badge badge-ok">● Running</span><span style="font-size:11px;color:var(--muted)">PID ${escHtml(String(doc.pid || ''))}</span>`
+                : doc.lastExitCode > 0
+                  ? `<span class="badge badge-error">● Crashed</span><span style="font-size:11px;color:var(--err)">last exit ${escHtml(String(doc.lastExitCode))}</span>`
+                  : `<span class="badge badge-muted">● Stopped</span>`}
+              <span style="font-size:11px;color:var(--muted)">Telegram bot: <code style="font-size:10px">8520032328:AAF…</code></span>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-sm btn-primary" onclick="doctorGatewayAction('start')" title="Start Doctor gateway" ${doc.running ? 'disabled style="opacity:.4"' : ''}>▶ Start</button>
+            <button class="btn-sm btn-secondary" onclick="doctorGatewayAction('restart')" title="Restart Doctor gateway">↺ Restart</button>
+            <button class="btn-sm btn-danger" onclick="doctorGatewayAction('stop')" title="Stop Doctor gateway" ${!doc.running ? 'disabled style="opacity:.4"' : ''}>■ Stop</button>
+          </div>
+        </div>
+        ${doc.running && doc.processStats?.memoryMB ? `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+          <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--ok)">${escHtml(doc.processStats.memoryMB)}</div>
+            <div style="font-size:10px;color:var(--muted)">MB RAM</div>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--accent)">${escHtml(doc.processStats.cpuPct)}%</div>
+            <div style="font-size:10px;color:var(--muted)">CPU</div>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--text)">${escHtml(doc.processStats.memPct)}%</div>
+            <div style="font-size:10px;color:var(--muted)">MEM%</div>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;padding:8px;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:var(--text)">${escHtml(fmtUptime(doc.processStats.uptime))}</div>
+            <div style="font-size:10px;color:var(--muted)">Uptime</div>
+          </div>
+        </div>` : ''}
+        <div style="margin-top:8px">
+          <button class="refresh-btn" onclick="showDoctorLogs()" style="font-size:11px">📜 View Logs</button>
+        </div>
+      </div>
+
       <!-- Row 2: Cron Jobs (full width) -->
       ${cronJobRows ? `
       <div class="card" style="margin-bottom:16px">
@@ -2313,6 +2359,24 @@ async function gatewayAction(action) {
   }
 
   // Wait longer for launchd/systemd to fully settle before refreshing
+  const delay = action === 'restart' ? 4000 : 2500;
+  setTimeout(loadAgentStatus, delay);
+}
+
+async function doctorGatewayAction(action) {
+  const labels = { start: 'Starting', stop: 'Stopping', restart: 'Restarting' };
+  toast(`${labels[action] || action} Doctor gateway…`);
+  document.querySelectorAll('#agent-status-tab .btn-sm').forEach(b => b.disabled = true);
+  try {
+    const res = await fetch(`/api/doctor-gateway/${action}`, { method: 'POST' }).then(r => r.json());
+    if (res.ok) {
+      toast(`✅ Doctor gateway ${action} succeeded`);
+    } else {
+      toast(`⚠️ Doctor gateway ${action} failed: ${(res.output||'').trim().slice(0,200) || 'unknown error'}`, 6000);
+    }
+  } catch (e) {
+    toast(`❌ Error: ${e.message}`, 5000);
+  }
   const delay = action === 'restart' ? 4000 : 2500;
   setTimeout(loadAgentStatus, delay);
 }
@@ -2397,6 +2461,8 @@ function startLogStream() {
         gwLogAppend(msg.lines);
       } else if (msg.type === 'lines') {
         gwLogAppend(msg.lines);
+      } else if (msg.type === 'log:line') {
+        if (msg.data) appendLogLine(msg.data);
       }
     } catch {}
   };
@@ -2905,48 +2971,165 @@ function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&
 // LOGS TAB
 // ══════════════════════════════════════════════════════════════
 let _logsTimer = null;
+let _allLogLines = [];    // all fetched parsed lines {ts, level, text}
+let _logsFilter = 'all';  // 'all' | 'error' | 'warn'
+let _logsTail = 200;
+let _logsUnread = 0;
 
-async function loadLogs() {
-  const file = document.getElementById('logs-file').value;
-  const level = document.getElementById('logs-level').value;
-  const lines = document.getElementById('logs-lines').value;
-  const el = document.getElementById('logs-content');
+function escHtmlLog(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderLogLine(l) {
+  const ts = l.ts ? `<span style="color:#4b5563;margin-right:8px">${escHtmlLog(l.ts)}</span>` : '';
+  let badge, color;
+  if (l.level === 'error') {
+    badge = `<span style="background:#7f1d1d;color:#fca5a5;border-radius:3px;padding:1px 5px;font-size:10px;margin-right:6px">ERR</span>`;
+    color = '#ff5555';
+  } else if (l.level === 'warn') {
+    badge = `<span style="background:#78350f;color:#fcd34d;border-radius:3px;padding:1px 5px;font-size:10px;margin-right:6px">WRN</span>`;
+    color = '#ffb86c';
+  } else {
+    badge = `<span style="background:#1a2332;color:#6b7280;border-radius:3px;padding:1px 5px;font-size:10px;margin-right:6px">INF</span>`;
+    color = '#cdd9e5';
+  }
+  return `<div style="color:${color};padding:1px 0">${ts}${badge}${escHtmlLog(l.text)}</div>`;
+}
+
+function applyLogsFilter() {
+  const search = (document.getElementById('logs-search')?.value || '').toLowerCase();
+  let lines = _allLogLines;
+  if (_logsFilter !== 'all') lines = lines.filter(l => l.level === _logsFilter);
+  if (search) lines = lines.filter(l =>
+    l.text.toLowerCase().includes(search) || l.ts.toLowerCase().includes(search)
+  );
+  const el = document.getElementById('logs-output');
+  if (!el) return;
+  if (!lines.length) {
+    el.innerHTML = '<span style="color:#6b7280">No matching log lines</span>';
+  } else {
+    el.innerHTML = lines.map(renderLogLine).join('');
+    if (document.getElementById('logs-autoscroll')?.checked) el.scrollTop = el.scrollHeight;
+  }
+  // Update stats
+  const total = _allLogLines.length;
+  const errors = _allLogLines.filter(l => l.level === 'error').length;
+  const warns = _allLogLines.filter(l => l.level === 'warn').length;
+  const statsEl = document.getElementById('logs-stats');
+  if (statsEl) statsEl.textContent = `${total.toLocaleString()} lines · ${errors} errors · ${warns} warnings`;
+}
+
+function setLogsFilter(f) {
+  _logsFilter = f;
+  document.querySelectorAll('.logs-filter-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(`logs-filter-${f}`);
+  if (btn) btn.classList.add('active');
+  applyLogsFilter();
+}
+
+async function loadGatewayLogs(tail) {
+  tail = tail || _logsTail;
+  _logsTail = tail;
+  const el = document.getElementById('logs-output');
+  if (el) el.innerHTML = '<span style="color:#6b7280">Loading…</span>';
+  const agent = document.getElementById('logs-agent-select')?.value || 'hermes';
+  const apiUrl = agent === 'doctor' ? `/api/doctor/logs?tail=${tail}` : `/api/gateway/logs?tail=${tail}`;
   try {
-    const data = await fetch(`/api/hermes/logs?file=${file}&level=${level}&lines=${lines}`).then(r => r.json());
-    if (data.error) { el.innerHTML = `<span style="color:#ef4444">⚠️ ${data.error}</span>`; return; }
-    let logLines = data.lines || [];
-    if (level !== 'all') {
-      const lvlUpper = level.toUpperCase();
-      // Match both short and long variants: WARNING matches WARN and WARNING
-      const variants = lvlUpper === 'WARNING' ? ['WARNING', 'WARN'] : [lvlUpper];
-      logLines = logLines.filter(l => {
-        const u = l.toUpperCase();
-        return variants.some(v => u.includes(` ${v} `) || u.includes(` ${v}:`) || u.includes(`[${v}]`));
-      });
+    const data = await fetch(apiUrl).then(r => r.json());
+    if (data.error) {
+      if (el) el.innerHTML = `<span style="color:#ef4444">⚠️ ${escHtmlLog(data.error)}</span>`;
+      return;
     }
-    const colorLine = l => {
-      const u = l.toUpperCase();
-      if (u.includes(' ERROR ') || u.includes(' ERROR:') || u.includes('[ERROR]') || u.includes(' CRITICAL '))
-        return `<span style="color:#ef4444;background:rgba(239,68,68,.08);display:block">${escHtml(l)}</span>`;
-      if (u.includes(' WARNING ') || u.includes(' WARN ') || u.includes(' WARN:') || u.includes('[WARNING]') || u.includes('[WARN]'))
-        return `<span style="color:#f59e0b;background:rgba(245,158,11,.08);display:block">${escHtml(l)}</span>`;
-      if (u.includes(' INFO ') || u.includes(' INFO:') || u.includes('[INFO]'))
-        return `<span style="color:#e2e8f0;display:block">${escHtml(l)}</span>`;
-      if (u.includes(' DEBUG ') || u.includes(' DEBUG:') || u.includes('[DEBUG]'))
-        return `<span style="color:#6b7280;display:block">${escHtml(l)}</span>`;
-      return `<span style="color:#94a3b8;display:block">${escHtml(l)}</span>`;
-    };
-    el.innerHTML = logLines.map(colorLine).join('\n') || '<span style="color:#6b7280">No log entries</span>';
-    el.scrollTop = el.scrollHeight;
+    _allLogLines = data.lines || [];
+    applyLogsFilter();
   } catch(e) {
-    el.innerHTML = `<span style="color:#ef4444">Error: ${e.message}</span>`;
+    if (el) el.innerHTML = `<span style="color:#ef4444">Error: ${escHtmlLog(e.message)}</span>`;
   }
 }
 
+function onLogsAgentChange() {
+  _allLogLines = [];
+  _logsTail = 200;
+  clearLogsDisplay();
+  loadGatewayLogs();
+}
+
+function showDoctorLogs() {
+  show('logs');
+  const sel = document.getElementById('logs-agent-select');
+  if (sel) sel.value = 'doctor';
+  onLogsAgentChange();
+}
+
+// Keep backward compat alias
+function loadLogs() { loadGatewayLogs(); }
+
+function clearLogsDisplay() {
+  _allLogLines = [];
+  const el = document.getElementById('logs-output');
+  if (el) el.innerHTML = '<span style="color:#6b7280">Display cleared. Click ↻ Refresh to reload.</span>';
+  const statsEl = document.getElementById('logs-stats');
+  if (statsEl) statsEl.textContent = '';
+}
+
+function loadMoreLogs() {
+  loadGatewayLogs(_logsTail + 200);
+}
+
 function toggleLogsAutoRefresh() {
-  const on = document.getElementById('logs-autorefresh').checked;
-  if (on) { _logsTimer = setInterval(loadLogs, 5000); }
-  else { clearInterval(_logsTimer); _logsTimer = null; }
+  // kept for compatibility — no longer used
+}
+
+// Append a new log line from WebSocket (called from handleWsMessage)
+function appendLogLine(lineData) {
+  _allLogLines.push(lineData);
+  // Keep at most 2000 lines in memory
+  if (_allLogLines.length > 2000) _allLogLines = _allLogLines.slice(-2000);
+
+  // Check if logs tab is active
+  const logsTab = document.getElementById('tab-logs');
+  const isActive = logsTab && logsTab.classList.contains('active');
+  if (!isActive) {
+    _logsUnread++;
+    const navItem = document.querySelector('[data-tab="logs"] .icon');
+    if (navItem) navItem.textContent = `📋${_logsUnread > 0 ? ' ('+_logsUnread+')' : ''}`;
+    return;
+  }
+
+  // Apply filter to decide if this line should be shown
+  const search = (document.getElementById('logs-search')?.value || '').toLowerCase();
+  let show = (_logsFilter === 'all' || lineData.level === _logsFilter);
+  if (show && search) {
+    show = lineData.text.toLowerCase().includes(search) || lineData.ts.toLowerCase().includes(search);
+  }
+  if (!show) {
+    // Still update stats
+    const total = _allLogLines.length;
+    const errors = _allLogLines.filter(l => l.level === 'error').length;
+    const warns = _allLogLines.filter(l => l.level === 'warn').length;
+    const statsEl = document.getElementById('logs-stats');
+    if (statsEl) statsEl.textContent = `${total.toLocaleString()} lines · ${errors} errors · ${warns} warnings`;
+    return;
+  }
+
+  const el = document.getElementById('logs-output');
+  if (!el) return;
+  // Remove placeholder if present
+  const placeholder = el.querySelector('span');
+  if (placeholder && placeholder.style.color === 'rgb(107, 114, 128)') el.innerHTML = '';
+
+  const div = document.createElement('div');
+  div.innerHTML = renderLogLine(lineData);
+  el.appendChild(div.firstChild);
+
+  if (document.getElementById('logs-autoscroll')?.checked) el.scrollTop = el.scrollHeight;
+
+  // Update stats
+  const total = _allLogLines.length;
+  const errors = _allLogLines.filter(l => l.level === 'error').length;
+  const warns = _allLogLines.filter(l => l.level === 'warn').length;
+  const statsEl = document.getElementById('logs-stats');
+  if (statsEl) statsEl.textContent = `${total.toLocaleString()} lines · ${errors} errors · ${warns} warnings`;
 }
 </script>
 
